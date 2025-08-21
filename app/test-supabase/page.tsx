@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "../lib/supabaseClient"; // ✅ one level up, not two
+import { supabase } from "../../lib/supabaseClient"; // ✅ two levels up
 
 type Profile = {
   id: string;
@@ -9,7 +9,7 @@ type Profile = {
   phone: string | null;
 };
 
-export default function HomePage() {
+export default function TestSupabasePage() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [error, setError] = useState<string | null>(null);
 
