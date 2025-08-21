@@ -61,6 +61,15 @@ const Home: FC = () => {
           </button>
         </form>
         {error && <p className="text-red-600 mt-4">Error: {error}</p>}
+
+        <div className="flex justify-between mt-4 text-sm">
+          <a href="/auth/reset-password" className="text-blue-600 hover:underline">
+            Forgot Password?
+          </a>
+          <a href="/auth/reset-password" className="text-blue-600 hover:underline">
+            Forgot your password? Reset it here
+          </a>
+        </div>
       </main>
 
       <footer className="mt-16 flex gap-6 flex-wrap items-center justify-center text-sm text-gray-500">
