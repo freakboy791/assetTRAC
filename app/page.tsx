@@ -1,7 +1,27 @@
 import Image from "next/image";
-import { FC } from "react";
+import { FC, useState } from "react";
+import { supabase } from "../lib/supabaseClient";
 
 const Home: FC = () => {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    setLoading(false);
+    if (error) {
+      setError(error.message);
+    }
+  };
+
   return (
     <div className="font-sans flex flex-col items-center justify-center min-h-screen p-8 sm:p-20">
       <main className="flex flex-col gap-8 items-center text-center">
@@ -13,24 +33,32 @@ const Home: FC = () => {
           Secure. Scalable. Ready to grow with your business.
         </p>
 
-        <div className="flex gap-4 mt-6">
-          <a
-            className="rounded-md border border-solid border-transparent transition-colors flex items-center justify-center bg-blue-600 text-white hover:bg-blue-700 font-medium text-sm sm:text-base h-10 sm:h-12 px-6"
-            href="https://github.com"
-            target="_blank"
-            rel="noopener noreferrer"
+        <form onSubmit={handleLogin} className="space-y-4 w-full max-w-sm">
+          <input
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            required
+            className="w-full p-2 border rounded"
+          />
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            required
+            className="w-full p-2 border rounded"
+          />
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-blue-600 text-white py-2 rounded"
           >
-            View on GitHub
-          </a>
-          <a
-            className="rounded-md border border-solid border-gray-300 dark:border-gray-600 transition-colors flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-800 font-medium text-sm sm:text-base h-10 sm:h-12 px-6"
-            href="https://vercel.com"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Powered by Vercel
-          </a>
-        </div>
+            {loading ? "Logging in..." : "Login"}
+          </button>
+        </form>
+        {error && <p className="text-red-600 mt-4">Error: {error}</p>}
       </main>
 
       <footer className="mt-16 flex gap-6 flex-wrap items-center justify-center text-sm text-gray-500">
@@ -61,6 +89,9 @@ const Home: FC = () => {
       </footer>
     </div>
   );
-};
+
+
+
+export default Home;};};
 
 export default Home;
