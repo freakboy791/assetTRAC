@@ -62,12 +62,12 @@ const Home: FC = () => {
         </form>
         {error && <p className="text-red-600 mt-4">Error: {error}</p>}
 
-        <div className="flex justify-between mt-4 text-sm">
-          <a href="/auth/reset-password" className="text-blue-600 hover:underline">
-            Forgot Password?
+        <div className="flex flex-col items-center mt-4 space-y-2">
+          <a href="/auth/signup" className="text-blue-600 hover:underline">
+            Sign up
           </a>
           <a href="/auth/reset-password" className="text-blue-600 hover:underline">
-            Forgot your password? Reset it here
+            Reset Password
           </a>
         </div>
       </main>
