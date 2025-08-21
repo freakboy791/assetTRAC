@@ -89,9 +89,6 @@ const Home: FC = () => {
       </footer>
     </div>
   );
-
-
-
-export default Home;};};
+};
 
 export default Home;
