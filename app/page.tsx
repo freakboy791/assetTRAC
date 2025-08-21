@@ -62,7 +62,7 @@ const Home: FC = () => {
         </form>
         {error && <p className="text-red-600 mt-4">Error: {error}</p>}
 
-        <div className="flex flex-col items-center mt-4 space-y-2">
+        <div className="flex justify-center mt-4 space-x-4">
           <a href="/auth/signup" className="text-blue-600 hover:underline">
             Sign up
           </a>
