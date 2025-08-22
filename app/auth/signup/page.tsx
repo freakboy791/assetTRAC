@@ -22,11 +22,12 @@ export default function Signup() {
     try {
       const redirectTo = `${window.location.origin}/auth/callback`;
       console.log("Signing up with:", { email, redirectTo });
-      // supabase-js v2 type for signUp options can be different between installs; cast to any to avoid TS issues.
-      const result = await (supabase.auth as any).signUp(
-        { email, password },
-        { emailRedirectTo: redirectTo }
-      );
+      // Use single-argument signUp signature and include redirect in options
+      const result = await supabase.auth.signUp({
+        email,
+        password,
+        options: { emailRedirectTo: redirectTo },
+      });
       console.log("signUp result:", result);
       if (result.error) {
         console.error("Sign-up error:", result.error);
@@ -85,6 +86,18 @@ export default function Signup() {
         <p className="text-green-600 mt-4">
           Signup successful! Check your email. If the confirmation link fails, ensure your dev server is running at{" "}
           <code>{typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"}/auth/callback</code>
+          <br />
+          {/* Debug: provide a clickable link to verify the callback route is reachable from your browser */}
+          {typeof window !== "undefined" && (
+            <a
+              href={`${window.location.origin}/auth/callback`}
+              target="_blank"
+              rel="noreferrer"
+              className="text-blue-600 underline block mt-2"
+            >
+              Open local callback route
+            </a>
+          )}
         </p>
       )}
     </div>
