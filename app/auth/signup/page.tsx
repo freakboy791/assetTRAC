@@ -14,12 +14,14 @@ export default function Signup() {
     setLoading(true);
     setError(null);
     setSuccess(false);
+    console.log("Signing up with:", { email, password });
     const { error } = await supabase.auth.signUp({
       email,
       password,
     });
     setLoading(false);
     if (error) {
+      console.error("Sign-up error:", error);
       setError(error.message);
     } else {
       setSuccess(true);
@@ -29,7 +31,7 @@ export default function Signup() {
   return (
     <div className="max-w-md mx-auto p-8">
       <h1 className="text-2xl font-bold mb-4">Sign Up</h1>
-      <form onSubmit={handleSignup} className="space-y-4" suppressHydrationWarning>
+      <form onSubmit={handleSignup} className="space-y-4">
         <input
           type="email"
           placeholder="Email"
