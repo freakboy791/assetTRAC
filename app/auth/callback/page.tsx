@@ -11,10 +11,9 @@ export default function AuthCallback() {
     const verifyToken = async () => {
       const params = new URLSearchParams(window.location.search);
       const token = params.get("token");
-      const type = params.get("type");
       const email = params.get("email");
 
-      if (!token || !type) {
+      if (!token) {
         setStatus("Invalid or missing token.");
         return;
       }
@@ -24,17 +23,23 @@ export default function AuthCallback() {
         return;
       }
 
-      const { error } = await supabase.auth.verifyOtp({
-        email,
-        token,
-        type: "email",
-      });
+      try {
+        const { error } = await supabase.auth.verifyOtp({
+          email,
+          token,
+          type: "email",
+        });
 
-      if (error) {
-        setStatus(`Verification failed: ${error.message}`);
-      } else {
-        setStatus("Verification successful! Redirecting...");
-        setTimeout(() => router.push("/auth/login"), 2000);
+        if (error) {
+          console.error("Verification error:", error);
+          setStatus(`Verification failed: ${error.message}`);
+        } else {
+          setStatus("Verification successful! Redirecting...");
+          setTimeout(() => router.push("/auth/login"), 2000);
+        }
+      } catch (err) {
+        console.error("Unexpected error during verification:", err);
+        setStatus("An unexpected error occurred during verification.");
       }
     };
 
