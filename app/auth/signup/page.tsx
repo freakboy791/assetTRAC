@@ -35,7 +35,7 @@ export default function Signup() {
         <input
           type="email"
           placeholder="Email"
-          value={email}
+          defaultValue={email}
           onChange={e => setEmail(e.target.value)}
           required
           className="w-full p-2 border rounded"
@@ -43,7 +43,7 @@ export default function Signup() {
         <input
           type="password"
           placeholder="Password"
-          value={password}
+          defaultValue={password}
           onChange={e => setPassword(e.target.value)}
           required
           className="w-full p-2 border rounded"
