@@ -29,16 +29,16 @@ export default function Login() {
         <input
           type="email"
           placeholder="Email"
-          value={email}
-          onChange={e => setEmail(e.target.value)}
+          defaultValue=""
+          onChange={(e) => setEmail(e.target.value)}
           required
           className="w-full p-2 border rounded"
         />
         <input
           type="password"
           placeholder="Password"
-          value={password}
-          onChange={e => setPassword(e.target.value)}
+          defaultValue=""
+          onChange={(e) => setPassword(e.target.value)}
           required
           className="w-full p-2 border rounded"
         />
