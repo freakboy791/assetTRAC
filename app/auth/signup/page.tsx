@@ -24,19 +24,23 @@ export default function Signup() {
       const redirectTo = `${baseUrl}/auth/login`;
       console.log("Signing up with:", { email, redirectTo });
 
-      // Use Supabase REST signup endpoint to control the `redirect_to` query param
+      // Use Supabase REST signup endpoint with redirect_to in query string
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
       const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
 
-      const res = await fetch(`${supabaseUrl}/auth/v1/signup`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          apikey: supabaseAnonKey,
-        },
-        body: JSON.stringify({ email, password, redirect_to: redirectTo }),
-      });
+      const res = await fetch(
+        `${supabaseUrl}/auth/v1/signup?redirect_to=${encodeURIComponent(redirectTo)}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            apikey: supabaseAnonKey,
+            Authorization: `Bearer ${supabaseAnonKey}`,
+          },
+          body: JSON.stringify({ email, password }),
+        }
+      );
 
       const json = await res.json();
       console.log("REST signUp response:", json);
