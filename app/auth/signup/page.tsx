@@ -20,14 +20,23 @@ export default function Signup() {
     setError(null);
     setSuccess(false);
     try {
-      console.log("Signing up with:", { email, password });
-      const { error } = await supabase.auth.signUp({ email, password });
-      if (error) {
-        console.error("Sign-up error:", error);
-        setError(error.message);
+      const redirectTo = `${window.location.origin}/auth/callback`;
+      console.log("Signing up with:", { email, redirectTo });
+      // supabase-js v2 type for signUp options can be different between installs; cast to any to avoid TS issues.
+      const result = await (supabase.auth as any).signUp(
+        { email, password },
+        { emailRedirectTo: redirectTo }
+      );
+      console.log("signUp result:", result);
+      if (result.error) {
+        console.error("Sign-up error:", result.error);
+        setError(result.error.message || "Sign-up failed");
       } else {
         setSuccess(true);
       }
+    } catch (err) {
+      console.error("Unexpected sign-up error:", err);
+      setError("Unexpected error during signup");
     } finally {
       setLoading(false);
     }
@@ -74,7 +83,8 @@ export default function Signup() {
       {error && <p className="text-red-600 mt-4">Error: {error}</p>}
       {success && (
         <p className="text-green-600 mt-4">
-          Signup successful! Please check your email to confirm your account.
+          Signup successful! Check your email. If the confirmation link fails, ensure your dev server is running at{" "}
+          <code>{typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"}/auth/callback</code>
         </p>
       )}
     </div>
