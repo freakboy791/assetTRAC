@@ -12,15 +12,22 @@ export default function AuthCallback() {
       const params = new URLSearchParams(window.location.search);
       const token = params.get("token");
       const type = params.get("type");
+      const email = params.get("email");
 
       if (!token || !type) {
         setStatus("Invalid or missing token.");
         return;
       }
 
+      if (!email) {
+        setStatus("Missing email parameter.");
+        return;
+      }
+
       const { error } = await supabase.auth.verifyOtp({
+        email,
         token,
-        type,
+        type: "email",
       });
 
       if (error) {
