@@ -95,10 +95,7 @@ export default function Signup() {
 
       {error && <p className="text-red-600 mt-4">Error: {error}</p>}
       {success && (
-        <p className="text-green-600 mt-4">
-          Signup successful! Check your email. If the confirmation link fails, ensure your dev server is running at{" "}
-          <code>{typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"}/auth/callback</code>
-        </p>
+        <p className="text-green-600 mt-4">Signup successful! Check your email.</p>
       )}
     </div>
   );
