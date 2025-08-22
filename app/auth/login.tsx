@@ -12,12 +12,14 @@ export default function Login() {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    console.log("Logging in with:", { email, password });
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
     setLoading(false);
     if (error) {
+      console.error("Login error:", error);
       setError(error.message);
     }
   };
@@ -29,7 +31,7 @@ export default function Login() {
         <input
           type="email"
           placeholder="Email"
-          defaultValue=""
+          value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
           className="w-full p-2 border rounded"
@@ -37,7 +39,7 @@ export default function Login() {
         <input
           type="password"
           placeholder="Password"
-          defaultValue=""
+          value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
           className="w-full p-2 border rounded"
