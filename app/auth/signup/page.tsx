@@ -22,16 +22,28 @@ export default function Signup() {
     try {
       const redirectTo = `${window.location.origin}/auth/callback`;
       console.log("Signing up with:", { email, redirectTo });
-      // Use single-argument signUp signature and include redirect in options
-      const result = await supabase.auth.signUp({
-        email,
-        password,
-        options: { emailRedirectTo: redirectTo },
+
+      // Use Supabase REST signup endpoint to control the `redirect_to` query param
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
+      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
+
+      const res = await fetch(`${supabaseUrl}/auth/v1/signup`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          apikey: supabaseAnonKey,
+        },
+        body: JSON.stringify({ email, password, redirect_to: redirectTo }),
       });
-      console.log("signUp result:", result);
-      if (result.error) {
-        console.error("Sign-up error:", result.error);
-        setError(result.error.message || "Sign-up failed");
+
+      const json = await res.json();
+      console.log("REST signUp response:", json);
+
+      if (!res.ok) {
+        const message = json?.error || json?.message || "Sign-up failed";
+        console.error("Sign-up error (REST):", message);
+        setError(message);
       } else {
         setSuccess(true);
       }
