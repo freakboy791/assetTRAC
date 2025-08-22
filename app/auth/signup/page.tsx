@@ -20,7 +20,8 @@ export default function Signup() {
     setError(null);
     setSuccess(false);
     try {
-      const redirectTo = `${window.location.origin}/auth/callback`;
+      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
+      const redirectTo = `${baseUrl}/auth/login`;
       console.log("Signing up with:", { email, redirectTo });
 
       // Use Supabase REST signup endpoint to control the `redirect_to` query param
