@@ -5,45 +5,81 @@ import { supabase } from "@/lib/supabaseClient";
 
 export default function AuthCallback() {
   const router = useRouter();
-  const [status, setStatus] = useState("Verifying...");
+  const [status, setStatus] = useState("Processing...");
 
   useEffect(() => {
-    const verifyToken = async () => {
+    const handleCallback = async () => {
+      setStatus("Processing authentication callback...");
+
+      // Handle query params and hash for tokens
       const params = new URLSearchParams(window.location.search);
       const token = params.get("token");
+      const type = params.get("type");
       const email = params.get("email");
 
-      if (!token) {
-        setStatus("Invalid or missing token.");
-        return;
-      }
-
-      if (!email) {
-        setStatus("Missing email parameter.");
-        return;
-      }
-
-      try {
-        const { error } = await supabase.auth.verifyOtp({
-          email,
-          token,
-          type: "email",
-        });
-
-        if (error) {
-          console.error("Verification error:", error);
-          setStatus(`Verification failed: ${error.message}`);
-        } else {
-          setStatus("Verification successful! Redirecting...");
-          setTimeout(() => router.push("/auth/login"), 2000);
+      // If token present in query (some Supabase flows), verify via verifyOtp
+      if (token) {
+        if (!email) {
+          setStatus("Missing email parameter for token verification.");
+          return;
         }
-      } catch (err) {
-        console.error("Unexpected error during verification:", err);
-        setStatus("An unexpected error occurred during verification.");
+        try {
+          const { error } = await supabase.auth.verifyOtp({
+            email,
+            token,
+            type: "email",
+          });
+          if (error) {
+            console.error("verifyOtp error:", error);
+            setStatus(`Verification failed: ${error.message}`);
+          } else {
+            setStatus("Verification successful! Redirecting...");
+            setTimeout(() => router.push("/auth/login"), 1500);
+          }
+          return;
+        } catch (err) {
+          console.error("verifyOtp threw:", err);
+          setStatus("Verification failed due to an unexpected error.");
+          return;
+        }
       }
+
+      // If no token found, check hash fragment for access_token (auth redirect flow)
+      const hash = window.location.hash || "";
+      if (hash.includes("access_token")) {
+        try {
+          // Parse fragment params
+          const frag = new URLSearchParams(hash.replace(/^#/, ""));
+          const access_token = frag.get("access_token");
+          const refresh_token = frag.get("refresh_token");
+          if (access_token) {
+            // set session so supabase client knows about it
+            const { data, error } = await supabase.auth.setSession({
+              access_token: access_token || "",
+              refresh_token: refresh_token || "",
+            });
+            if (error) {
+              console.error("setSession error:", error);
+              setStatus(`Session setup failed: ${error.message}`);
+            } else {
+              console.log("Session established:", data);
+              setStatus("Email verified and session established. Redirecting...");
+              setTimeout(() => router.push("/auth/login"), 1500);
+            }
+            return;
+          }
+        } catch (err) {
+          console.error("Error handling fragment tokens:", err);
+          setStatus("Failed to process authentication fragment.");
+          return;
+        }
+      }
+
+      // Nothing matched
+      setStatus("Invalid or missing token.");
     };
 
-    verifyToken();
+    handleCallback();
   }, [router]);
 
   return (
