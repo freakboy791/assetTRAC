@@ -20,7 +20,12 @@ export default function Signup() {
     setError(null);
     setSuccess(false);
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
+      const currentOrigin = typeof window !== "undefined" ? window.location.origin : null;
+      const envBase = process.env.NEXT_PUBLIC_SITE_URL || null;
+      // Prefer the live browser origin if it's not localhost; else use env; else fallback
+      const baseUrl = currentOrigin && !currentOrigin.includes("localhost")
+        ? currentOrigin
+        : (envBase || currentOrigin || "http://localhost:3000");
       const redirectTo = `${baseUrl}/auth/login`;
       console.log("Signing up with:", { email, redirectTo });
 
