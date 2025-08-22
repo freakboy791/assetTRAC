@@ -29,11 +29,11 @@ export default function Signup() {
   return (
     <div className="max-w-md mx-auto p-8">
       <h1 className="text-2xl font-bold mb-4">Sign Up</h1>
-      <form onSubmit={handleSignup} className="space-y-4">
+      <form onSubmit={handleSignup} className="space-y-4" suppressHydrationWarning>
         <input
           type="email"
           placeholder="Email"
-          defaultValue=""
+          value={email}
           onChange={e => setEmail(e.target.value)}
           required
           className="w-full p-2 border rounded"
@@ -41,7 +41,7 @@ export default function Signup() {
         <input
           type="password"
           placeholder="Password"
-          defaultValue=""
+          value={password}
           onChange={e => setPassword(e.target.value)}
           required
           className="w-full p-2 border rounded"
