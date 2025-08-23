@@ -1,7 +1,7 @@
 "use client";
 
 import { FC, useState } from "react";
-import { supabase } from "../lib/supabaseClient";
+import { supabase } from "../src/lib/supabaseClient";
 
 const Home: FC = () => {
   const [email, setEmail] = useState("");
