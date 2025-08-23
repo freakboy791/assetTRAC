@@ -11,19 +11,18 @@ export default function AuthCallback() {
     const handleCallback = async () => {
       setStatus("Processing authentication callback...");
 
-      // Handle query params and hash for tokens
-      const params = new URLSearchParams(window.location.search);
-      const token = params.get("token");
-      const type = params.get("type");
-      const email = params.get("email");
+      try {
+        // Handle query params and hash for tokens
+        const params = new URLSearchParams(window.location.search);
+        const token = params.get("token");
+        const type = params.get("type");
+        const email = params.get("email");
 
-      // If token present in query (some Supabase flows), verify via verifyOtp
-      if (token) {
-        if (!email) {
-          setStatus("Missing email parameter for token verification.");
-          return;
-        }
-        try {
+        if (token) {
+          if (!email) {
+            setStatus("Missing email parameter for token verification.");
+            return;
+          }
           const { error } = await supabase.auth.verifyOtp({
             email,
             token,
@@ -34,26 +33,19 @@ export default function AuthCallback() {
             setStatus(`Verification failed: ${error.message}`);
           } else {
             setStatus("Verification successful! Redirecting...");
-            setTimeout(() => router.push("/auth/login"), 1500);
+            router.push("/auth/login");
           }
           return;
-        } catch (err) {
-          console.error("verifyOtp threw:", err);
-          setStatus("Verification failed due to an unexpected error.");
-          return;
         }
-      }
 
-      // If no token found, check hash fragment for access_token (auth redirect flow)
-      const hash = window.location.hash || "";
-      if (hash.includes("access_token")) {
-        try {
-          // Parse fragment params
+        // Handle hash fragment for access_token (auth redirect flow)
+        const hash = window.location.hash || "";
+        if (hash.includes("access_token")) {
           const frag = new URLSearchParams(hash.replace(/^#/, ""));
           const access_token = frag.get("access_token");
           const refresh_token = frag.get("refresh_token");
+
           if (access_token) {
-            // set session so supabase client knows about it
             const { data, error } = await supabase.auth.setSession({
               access_token: access_token || "",
               refresh_token: refresh_token || "",
@@ -64,19 +56,18 @@ export default function AuthCallback() {
             } else {
               console.log("Session established:", data);
               setStatus("Email verified and session established. Redirecting...");
-              setTimeout(() => router.push("/auth/login"), 1500);
+              router.push("/auth/login");
             }
             return;
           }
-        } catch (err) {
-          console.error("Error handling fragment tokens:", err);
-          setStatus("Failed to process authentication fragment.");
-          return;
         }
-      }
 
-      // Nothing matched
-      setStatus("Invalid or missing token.");
+        // No valid token found
+        setStatus("Invalid or missing token. Please try again.");
+      } catch (err) {
+        console.error("Unexpected error during authentication callback:", err);
+        setStatus("An unexpected error occurred. Please try again later.");
+      }
     };
 
     handleCallback();
