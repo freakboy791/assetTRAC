@@ -14,63 +14,39 @@ export default function AuthCallback() {
       try {
         // Parse URL hash and query parameters
         const params = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+        const access_token = params.get("access_token");
+        const refresh_token = params.get("refresh_token");
         const error = params.get("error");
-        const errorCode = params.get("error_code");
         const errorDescription = params.get("error_description");
 
+        // Handle errors in the URL
         if (error) {
-          console.error(`Error during authentication: ${errorCode} - ${errorDescription}`);
+          console.error(`Error during authentication: ${error} - ${errorDescription}`);
           setStatus(`Error: ${errorDescription || "An unknown error occurred."}`);
           return;
         }
 
-        // Handle query params and hash for tokens
-        const token = params.get("token");
-        const type = params.get("type");
-        const email = params.get("email");
-
-        if (token) {
-          if (!email) {
-            setStatus("Missing email parameter for token verification.");
-            return;
-          }
-          const { error } = await supabase.auth.verifyOtp({
-            email,
-            token,
-            type: "email",
-          });
-          if (error) {
-            console.error("verifyOtp error:", error);
-            setStatus(`Verification failed: ${error.message}`);
-          } else {
-            setStatus("Verification successful! Redirecting...");
-            router.push("/auth/login");
-          }
+        // Ensure tokens are present
+        if (!access_token || !refresh_token) {
+          console.error("Missing tokens in the callback URL.");
+          setStatus("Invalid or missing tokens. Please try again.");
           return;
         }
 
-        // Handle hash fragment for access_token (auth redirect flow)
-        const access_token = params.get("access_token");
-        const refresh_token = params.get("refresh_token");
+        // Set the session with Supabase
+        const { data, error: sessionError } = await supabase.auth.setSession({
+          access_token,
+          refresh_token,
+        });
 
-        if (access_token) {
-          const { data, error } = await supabase.auth.setSession({
-            access_token: access_token || "",
-            refresh_token: refresh_token || "",
-          });
-          if (error) {
-            console.error("setSession error:", error);
-            setStatus(`Session setup failed: ${error.message}`);
-          } else {
-            console.log("Session established:", data);
-            setStatus("Email verified and session established. Redirecting...");
-            router.push("/auth/login");
-          }
-          return;
+        if (sessionError) {
+          console.error("Error setting session:", sessionError);
+          setStatus(`Failed to establish session: ${sessionError.message}`);
+        } else {
+          console.log("Session established successfully:", data);
+          setStatus("Authentication successful! Redirecting...");
+          router.push("/dashboard"); // Redirect to the dashboard or another page
         }
-
-        // No valid token found
-        setStatus("Invalid or missing token. Please try again.");
       } catch (err) {
         console.error("Unexpected error during authentication callback:", err);
         setStatus("An unexpected error occurred. Please try again later.");
