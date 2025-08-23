@@ -92,7 +92,7 @@ export default function Signup() {
             disabled={loading}
             className="w-full bg-blue-600 text-white py-2 rounded"
           >
-            {loading ? "Signing up..." : "Sign Up"}
+            {loading ? "Signing up..." : "Sign-Up"}
           </button>
         </form>
       ) : (
@@ -105,7 +105,7 @@ export default function Signup() {
 
       {error && <p className="text-red-600 mt-4">Error: {error}</p>}
       {success && (
-        <p className="text-green-600 mt-4">Signup successful! Check your email.</p>
+        <p className="text-green-600 mt-4">Sign-up successful! Check your email.</p>
       )}
     </div>
   );
