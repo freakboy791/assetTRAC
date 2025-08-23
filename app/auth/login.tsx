@@ -68,6 +68,15 @@ export default function Login() {
       )}
 
       {error && <p className="text-red-600 mt-4">Error: {error}</p>}
+
+      <div className="flex justify-between mt-4 w-full max-w-sm">
+        <a href="/auth/signup" className="text-blue-600 underline">
+          Sign-up
+        </a>
+        <a href="/auth/reset-password" className="text-blue-600 underline">
+          Reset Password
+        </a>
+      </div>
     </div>
   );
 }
