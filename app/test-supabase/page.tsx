@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "../../lib/supabaseClient"; // ✅ two levels up
+import { supabase } from "../../src/lib/supabaseClient"; // Updated path
 
 type Profile = {
   id: string;
