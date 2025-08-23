@@ -12,8 +12,19 @@ export default function AuthCallback() {
       setStatus("Processing authentication callback...");
 
       try {
+        // Parse URL hash and query parameters
+        const params = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+        const error = params.get("error");
+        const errorCode = params.get("error_code");
+        const errorDescription = params.get("error_description");
+
+        if (error) {
+          console.error(`Error during authentication: ${errorCode} - ${errorDescription}`);
+          setStatus(`Error: ${errorDescription || "An unknown error occurred."}`);
+          return;
+        }
+
         // Handle query params and hash for tokens
-        const params = new URLSearchParams(window.location.search);
         const token = params.get("token");
         const type = params.get("type");
         const email = params.get("email");
@@ -39,27 +50,23 @@ export default function AuthCallback() {
         }
 
         // Handle hash fragment for access_token (auth redirect flow)
-        const hash = window.location.hash || "";
-        if (hash.includes("access_token")) {
-          const frag = new URLSearchParams(hash.replace(/^#/, ""));
-          const access_token = frag.get("access_token");
-          const refresh_token = frag.get("refresh_token");
+        const access_token = params.get("access_token");
+        const refresh_token = params.get("refresh_token");
 
-          if (access_token) {
-            const { data, error } = await supabase.auth.setSession({
-              access_token: access_token || "",
-              refresh_token: refresh_token || "",
-            });
-            if (error) {
-              console.error("setSession error:", error);
-              setStatus(`Session setup failed: ${error.message}`);
-            } else {
-              console.log("Session established:", data);
-              setStatus("Email verified and session established. Redirecting...");
-              router.push("/auth/login");
-            }
-            return;
+        if (access_token) {
+          const { data, error } = await supabase.auth.setSession({
+            access_token: access_token || "",
+            refresh_token: refresh_token || "",
+          });
+          if (error) {
+            console.error("setSession error:", error);
+            setStatus(`Session setup failed: ${error.message}`);
+          } else {
+            console.log("Session established:", data);
+            setStatus("Email verified and session established. Redirecting...");
+            router.push("/auth/login");
           }
+          return;
         }
 
         // No valid token found
