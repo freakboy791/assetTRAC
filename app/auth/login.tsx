@@ -33,8 +33,8 @@ export default function Login() {
     <div className="max-w-md mx-auto p-8">
       <h1 className="text-2xl font-bold mb-4">Login</h1>
       {/* Only render the interactive form on the client after mount to prevent hydration mismatches */}
-      {mounted ? (
-        <form onSubmit={handleLogin} className="space-y-4">
+      {mounted && (
+        <form onSubmit={handleLogin} className="space-y-4 w-full max-w-sm">
           <input
             type="email"
             placeholder="Email"
@@ -59,12 +59,6 @@ export default function Login() {
             {loading ? "Logging in..." : "Login"}
           </button>
         </form>
-      ) : (
-        <div className="space-y-4">
-          <div className="h-10 bg-gray-100 rounded" />
-          <div className="h-10 bg-gray-100 rounded" />
-          <div className="h-10 bg-gray-100 rounded" />
-        </div>
       )}
 
       {error && <p className="text-red-600 mt-4">Error: {error}</p>}
