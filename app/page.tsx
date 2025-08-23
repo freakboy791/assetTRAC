@@ -63,7 +63,7 @@ const Home: FC = () => {
 
         <div className="flex justify-center mt-4 space-x-4">
           <a href="/auth/signup" className="text-blue-600 hover:underline">
-            Sign up
+            Sign-up
           </a>
           <a href="/auth/reset-password" className="text-blue-600 hover:underline">
             Reset Password
