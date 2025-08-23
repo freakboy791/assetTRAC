@@ -67,7 +67,7 @@ export default function Signup() {
 
   return (
     <div className="max-w-md mx-auto p-8">
-      <h1 className="text-2xl font-bold mb-4">Sign Up</h1>
+      <h1 className="text-2xl font-bold mb-4">Sign-Up</h1>
 
       {mounted ? (
         <form onSubmit={handleSignup} className="space-y-4">
