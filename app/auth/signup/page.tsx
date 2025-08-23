@@ -59,7 +59,7 @@ export default function Signup() {
       }
     } catch (err) {
       console.error("Unexpected sign-up error:", err);
-      setError("Unexpected error during signup");
+      setError("Unexpected error during sign-up");
     } finally {
       setLoading(false);
     }
