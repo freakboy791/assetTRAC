@@ -36,7 +36,7 @@ export default function AuthPage() {
         email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth`
+          emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/auth`
         }
       })
 
@@ -97,7 +97,7 @@ export default function AuthPage() {
 
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth`
+        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/auth`
       })
 
       if (error) {
