@@ -21,6 +21,13 @@ export default function AuthPage() {
 
   const handleSignUp = async () => {
     console.log('Sign up button clicked')
+    console.log('Environment check:', {
+      NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL,
+      NODE_ENV: process.env.NODE_ENV,
+      hasSupabaseUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+      hasSupabaseKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    })
+    
     if (!email || !password) {
       setMessage('Please enter both email and password')
       return
