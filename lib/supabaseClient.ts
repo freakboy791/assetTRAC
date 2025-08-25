@@ -7,7 +7,9 @@ console.log('Supabase client initialization:', {
   supabaseUrl: supabaseUrl ? 'SET' : 'NOT SET',
   supabaseAnonKey: supabaseAnonKey ? 'SET' : 'NOT SET',
   NODE_ENV: process.env.NODE_ENV,
-  isClient: typeof window !== 'undefined'
+  isClient: typeof window !== 'undefined',
+  urlLength: supabaseUrl ? supabaseUrl.length : 0,
+  keyLength: supabaseAnonKey ? supabaseAnonKey.length : 0
 })
 
 // Create a fallback client for development builds

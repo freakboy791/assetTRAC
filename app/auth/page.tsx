@@ -43,6 +43,7 @@ export default function AuthPage() {
         email,
         password,
         options: {
+          // Production redirect URL - ensure this is deployed
           emailRedirectTo: `https://assettrac.vercel.app/auth`
         }
       })
