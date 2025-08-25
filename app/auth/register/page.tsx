@@ -1,28 +1,24 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import Link from 'next/link'
 
-export default function AuthPage() {
+export default function RegisterPage() {
   const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
 
-  useEffect(() => {
-    // Check if user is returning from email confirmation
-    const hash = window.location.hash
-    if (hash.includes('access_token') || hash.includes('refresh_token')) {
-      setMessage('Account confirmed successfully! You can now log in.')
-      // Clear the hash from URL
-      window.history.replaceState(null, '', '/auth')
+  const handleSignUp = async () => {
+    if (!email || !username || !password) {
+      setMessage('Please fill in all fields')
+      return
     }
-  }, [])
 
-  const handleLogIn = async () => {
-    if (!email || !password) {
-      setMessage('Please enter both email and password')
+    if (password.length < 6) {
+      setMessage('Password must be at least 6 characters')
       return
     }
 
@@ -30,54 +26,43 @@ export default function AuthPage() {
     setMessage('')
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signUp({
         email,
-        password
+        password,
+        options: {
+          data: {
+            username: username
+          },
+          emailRedirectTo: `https://assettrac.vercel.app/auth`
+        }
       })
 
       if (error) {
         // Handle specific error cases
-        if (error.message.includes('Email not confirmed')) {
-          setMessage('Please check your email and click the confirmation link before logging in. If you need a new confirmation email, try registering again.')
-        } else if (error.message.includes('Invalid login credentials')) {
-          setMessage('Invalid email or password. Please check your credentials or use the "Reset Password" button below if you forgot your password.')
+        if (error.message.includes('already registered') || 
+            error.message.includes('already exists') ||
+            error.message.includes('User already registered') ||
+            error.message.includes('duplicate key') ||
+            error.message.includes('already been registered') ||
+            error.message.includes('already signed up')) {
+          setMessage('An account associated with that email address already exists. Please login or reset password.')
         } else {
-          setMessage(`Log in error: ${error.message}`)
+          setMessage(`Registration error: ${error.message}`)
         }
       } else {
-        setMessage('Successfully logged in!')
-        // Redirect to dashboard or home page
-        window.location.href = '/'
+        // Check if this is a duplicate sign-up (user already exists)
+        if (data?.user && !data?.session) {
+          // User exists but no session - this means they're already registered
+          setMessage('An account associated with that email address already exists. Please login or reset password.')
+        } else {
+          setMessage('Please check your email for a confirmation link')
+          setEmail('')
+          setUsername('')
+          setPassword('')
+        }
       }
     } catch (error) {
-      setMessage(`Unexpected error: ${error}`)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleResetPassword = async () => {
-    if (!email) {
-      setMessage('Please enter your email address')
-      return
-    }
-
-    setLoading(true)
-    setMessage('')
-
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `https://assettrac.vercel.app/auth/reset-password`
-      })
-
-      if (error) {
-        setMessage(`Password reset error: ${error.message}`)
-      } else {
-        setMessage('Password reset email sent! Please check your email')
-        setEmail('')
-        setPassword('')
-      }
-    } catch (error) {
+      console.error('Unexpected error during registration:', error)
       setMessage(`Unexpected error: ${error}`)
     } finally {
       setLoading(false)
@@ -89,7 +74,7 @@ export default function AuthPage() {
       <div className="max-w-md w-full space-y-8">
         <div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Please sign in
+            Please Register
           </h2>
         </div>
         
@@ -113,6 +98,23 @@ export default function AuthPage() {
               />
             </div>
             <div>
+              <label htmlFor="username" className="sr-only">
+                Username
+              </label>
+              <input
+                id="username"
+                name="username"
+                type="text"
+                autoComplete="username"
+                required
+                suppressHydrationWarning
+                className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                placeholder="Username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+              />
+            </div>
+            <div>
               <label htmlFor="password" className="sr-only">
                 Password
               </label>
@@ -120,7 +122,7 @@ export default function AuthPage() {
                 id="password"
                 name="password"
                 type="password"
-                autoComplete="current-password"
+                autoComplete="new-password"
                 required
                 suppressHydrationWarning
                 className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
@@ -131,32 +133,22 @@ export default function AuthPage() {
             </div>
           </div>
 
-          <div className="space-y-3">
+          <div>
             <button
               type="button"
-              onClick={handleLogIn}
+              onClick={handleSignUp}
               disabled={loading}
               suppressHydrationWarning
               className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Signing in...' : 'Sign in'}
-            </button>
-            
-            <button
-              type="button"
-              onClick={handleResetPassword}
-              disabled={loading}
-              suppressHydrationWarning
-              className="group relative w-full flex justify-center py-2 px-4 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? 'Processing...' : 'Reset Password'}
+              {loading ? 'Creating Account...' : 'Register'}
             </button>
           </div>
 
           <div className="text-center text-sm text-gray-600">
-            Don't have an account?{' '}
-            <Link href="/auth/register" className="font-medium text-indigo-600 hover:text-indigo-500">
-              Create your account
+            Already have an account?{' '}
+            <Link href="/auth" className="font-medium text-indigo-600 hover:text-indigo-500">
+              Login
             </Link>
           </div>
 
@@ -171,6 +163,22 @@ export default function AuthPage() {
                 : 'bg-blue-50 text-blue-700 border border-blue-200'
             }`}>
               {message}
+              {message.includes('already exists') && (
+                <div className="mt-3 space-y-2">
+                  <Link
+                    href="/auth"
+                    className="block w-full bg-blue-600 text-white px-3 py-2 rounded text-xs hover:bg-blue-700 transition-colors text-center"
+                  >
+                    Go to Login
+                  </Link>
+                  <Link
+                    href="/auth/reset-password"
+                    className="block w-full bg-gray-600 text-white px-3 py-2 rounded text-xs hover:bg-gray-700 transition-colors text-center"
+                  >
+                    Reset Password
+                  </Link>
+                </div>
+              )}
             </div>
           )}
         </form>
