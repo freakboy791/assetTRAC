@@ -51,7 +51,12 @@ export default function AuthPage() {
       console.log('Sign up response:', { error })
 
       if (error) {
-        setMessage(`Sign up error: ${error.message}`)
+        // Handle specific error cases
+        if (error.message.includes('already registered') || error.message.includes('already exists')) {
+          setMessage('An account with this email already exists. Try logging in instead, or use the "Reset Password" option if you forgot your password.')
+        } else {
+          setMessage(`Sign up error: ${error.message}`)
+        }
       } else {
         setMessage('Please check your email for a confirmation link')
         setEmail('')
@@ -81,7 +86,14 @@ export default function AuthPage() {
       })
 
       if (error) {
-        setMessage(`Log in error: ${error.message}`)
+        // Handle specific error cases
+        if (error.message.includes('Email not confirmed')) {
+          setMessage('Please check your email and click the confirmation link before logging in. If you need a new confirmation email, try signing up again.')
+        } else if (error.message.includes('Invalid login credentials')) {
+          setMessage('Invalid email or password. Please check your credentials or use "Reset Password" if you forgot your password.')
+        } else {
+          setMessage(`Log in error: ${error.message}`)
+        }
       } else {
         setMessage('Successfully logged in!')
         // Redirect to dashboard or home page
@@ -131,6 +143,9 @@ export default function AuthPage() {
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
             Or create a new account
+          </p>
+          <p className="mt-1 text-center text-xs text-gray-500">
+            Already have an account? Use the Log In button. Forgot your password? Use Reset Password.
           </p>
         </div>
         
@@ -210,9 +225,30 @@ export default function AuthPage() {
                 ? 'bg-red-50 text-red-700 border border-red-200' 
                 : message.includes('successfully') || message.includes('confirmed') || message.includes('check your email')
                 ? 'bg-green-50 text-green-700 border border-green-200'
+                : message.includes('already exists')
+                ? 'bg-blue-50 text-blue-700 border border-blue-200'
                 : 'bg-blue-50 text-blue-700 border border-blue-200'
             }`}>
               {message}
+              {message.includes('already exists') && (
+                <div className="mt-3 space-y-2">
+                  <button
+                    onClick={() => setMessage('')}
+                    className="w-full bg-blue-600 text-white px-3 py-2 rounded text-xs hover:bg-blue-700 transition-colors"
+                  >
+                    Try Logging In
+                  </button>
+                  <button
+                    onClick={() => {
+                      setMessage('')
+                      setPassword('')
+                    }}
+                    className="w-full bg-gray-600 text-white px-3 py-2 rounded text-xs hover:bg-gray-700 transition-colors"
+                  >
+                    Clear Form
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </form>
