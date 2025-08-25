@@ -6,13 +6,12 @@ import Link from 'next/link'
 
 export default function RegisterPage() {
   const [email, setEmail] = useState('')
-  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
 
   const handleSignUp = async () => {
-    if (!email || !username || !password) {
+    if (!email || !password) {
       setMessage('Please fill in all fields')
       return
     }
@@ -30,9 +29,6 @@ export default function RegisterPage() {
         email,
         password,
         options: {
-          data: {
-            username: username
-          },
           emailRedirectTo: `https://assettrac.vercel.app/auth`
         }
       })
@@ -57,7 +53,6 @@ export default function RegisterPage() {
         } else {
           setMessage('Please check your email for a confirmation link')
           setEmail('')
-          setUsername('')
           setPassword('')
         }
       }
@@ -95,23 +90,6 @@ export default function RegisterPage() {
                 placeholder="Email address"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-            <div>
-              <label htmlFor="username" className="sr-only">
-                Username
-              </label>
-              <input
-                id="username"
-                name="username"
-                type="text"
-                autoComplete="username"
-                required
-                suppressHydrationWarning
-                className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="Username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
               />
             </div>
             <div>
