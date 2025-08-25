@@ -51,8 +51,20 @@ export default function AuthPage() {
       console.log('Sign up response:', { error })
 
       if (error) {
+        // Debug logging to see the actual error message
+        console.log('Sign up error details:', {
+          message: error.message,
+          status: error.status,
+          name: error.name
+        })
+        
         // Handle specific error cases
-        if (error.message.includes('already registered') || error.message.includes('already exists')) {
+        if (error.message.includes('already registered') || 
+            error.message.includes('already exists') ||
+            error.message.includes('User already registered') ||
+            error.message.includes('duplicate key') ||
+            error.message.includes('already been registered') ||
+            error.message.includes('already signed up')) {
           setMessage('An account with this email already exists. Try logging in instead, or use the "Reset Password" option if you forgot your password.')
         } else {
           setMessage(`Sign up error: ${error.message}`)
