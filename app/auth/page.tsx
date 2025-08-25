@@ -73,7 +73,9 @@ export default function AuthPage() {
       if (error) {
         setMessage(`Password reset error: ${error.message}`)
       } else {
-        setMessage('Password reset email sent! Please check your email')
+        // Note: Supabase will send an email even if the account doesn't exist
+        // This is a security feature to prevent email enumeration
+        setMessage('If an account exists with that email, a password reset link has been sent. If you don\'t have an account, consider creating one instead.')
         setEmail('')
         setPassword('')
       }
@@ -168,9 +170,21 @@ export default function AuthPage() {
                 ? 'bg-green-50 text-green-700 border border-green-200'
                 : message.includes('already exists')
                 ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                : message.includes('consider creating one instead')
+                ? 'bg-blue-50 text-blue-700 border border-blue-200'
                 : 'bg-blue-50 text-blue-700 border border-blue-200'
             }`}>
               {message}
+              {message.includes('consider creating one instead') && (
+                <div className="mt-3">
+                  <Link
+                    href="/auth/register"
+                    className="block w-full bg-indigo-600 text-white px-3 py-2 rounded text-xs hover:bg-indigo-700 transition-colors text-center"
+                  >
+                    Create Account
+                  </Link>
+                </div>
+              )}
             </div>
           )}
         </form>
