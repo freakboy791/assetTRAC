@@ -39,7 +39,7 @@ export default function AuthPage() {
 
     try {
       console.log('Calling supabase.auth.signUp...')
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -48,7 +48,7 @@ export default function AuthPage() {
         }
       })
 
-      console.log('Sign up response:', { error })
+      console.log('Sign up response:', { data, error })
 
       if (error) {
         // Debug logging to see the actual error message
@@ -70,9 +70,15 @@ export default function AuthPage() {
           setMessage(`Sign up error: ${error.message}`)
         }
       } else {
-        setMessage('Please check your email for a confirmation link')
-        setEmail('')
-        setPassword('')
+        // Check if this is a duplicate sign-up (user already exists)
+        if (data?.user && !data?.session) {
+          // User exists but no session - this means they're already registered
+          setMessage('An account with this email already exists. Please check your email for a confirmation link, or try logging in if you already confirmed your account.')
+        } else {
+          setMessage('Please check your email for a confirmation link')
+          setEmail('')
+          setPassword('')
+        }
       }
     } catch (error) {
       console.error('Unexpected error during sign up:', error)
