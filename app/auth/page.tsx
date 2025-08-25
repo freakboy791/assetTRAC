@@ -43,7 +43,7 @@ export default function AuthPage() {
         email,
         password,
         options: {
-          emailRedirectTo: 'https://assettrac.vercel.app/auth'
+          emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/auth`
         }
       })
 
@@ -104,7 +104,7 @@ export default function AuthPage() {
 
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: 'https://assettrac.vercel.app/auth'
+        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/auth`
       })
 
       if (error) {
