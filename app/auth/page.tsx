@@ -105,7 +105,7 @@ export default function AuthPage() {
 
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `https://assettrac.vercel.app/auth`
+        redirectTo: `https://assettrac.vercel.app/auth/reset-password`
       })
 
       if (error) {
