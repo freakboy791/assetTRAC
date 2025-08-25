@@ -89,13 +89,25 @@ export default function AuthPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Please sign in
-          </h2>
+        {/* Logo */}
+        <div className="text-center">
+          <div className="mx-auto h-16 w-16 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full flex items-center justify-center mb-4">
+            <span className="text-2xl font-bold text-white">AT</span>
+          </div>
+          <h1 className="text-3xl font-extrabold text-gray-900 bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+            assetTRAC
+          </h1>
+          <p className="mt-2 text-sm text-gray-600">Asset Tracking & Management</p>
         </div>
+
+        <div className="bg-white py-8 px-6 shadow rounded-lg sm:px-10">
+          <div className="mb-6">
+            <h2 className="text-center text-2xl font-bold text-gray-900">
+              Please sign in
+            </h2>
+          </div>
         
-        <form className="mt-8 space-y-6" onSubmit={(e) => e.preventDefault()}>
+          <form className="mt-8 space-y-6" onSubmit={(e) => e.preventDefault()}>
           <div className="space-y-4">
             <div>
               <label htmlFor="email" className="sr-only">
@@ -188,6 +200,7 @@ export default function AuthPage() {
             </div>
           )}
         </form>
+        </div>
       </div>
     </div>
   )
