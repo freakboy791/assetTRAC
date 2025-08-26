@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import Link from 'next/link'
 
+
 export default function RegisterPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -29,7 +30,7 @@ export default function RegisterPage() {
         email,
         password,
         options: {
-          emailRedirectTo: `https://assettrac.vercel.app/auth`
+          emailRedirectTo: `https://assettrac.vercel.app/dashboard`
         }
       })
 
@@ -51,7 +52,7 @@ export default function RegisterPage() {
           // User exists but no session - this means they're already registered
           setMessage('An account associated with that email address already exists. Please login or reset password.')
         } else {
-          setMessage('Please check your email for a confirmation link')
+          setMessage('Please check your email for a confirmation link. After confirming, you will be redirected to your dashboard.')
           setEmail('')
           setPassword('')
         }

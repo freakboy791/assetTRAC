@@ -51,11 +51,11 @@ export default function ResetPasswordPage() {
       })
 
       if (error) {
-        setMessage(`Password reset error: ${error.message}`)
+        setMessage(`Password update error: ${error.message}`)
       } else {
-        setMessage('Password updated successfully! Redirecting to login...')
+        setMessage('Password updated successfully! Redirecting to dashboard...')
         setTimeout(() => {
-          router.push('/auth')
+          router.push('/dashboard')
         }, 2000)
       }
     } catch (error) {
