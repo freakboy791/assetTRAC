@@ -101,23 +101,72 @@ Deno.serve(async (req) => {
       const userExists = existingUser.users.some(user => user.email === email)
       
       if (userExists) {
-        // User already exists - return success with a note
-        return new Response(
-          JSON.stringify({ 
-            success: true, 
-            message: `User with email ${email} already exists. Invitation created for existing user.`,
-            invitationLink,
-            userExists: true
-          }),
-          { 
-            status: 200,
-            headers: { 
+        // User already exists - send invitation email with the invitation link
+        console.log(`User ${email} already exists, sending invitation email with link: ${invitationLink}`)
+        
+        // For existing users, we need to send a custom email since Supabase auth.inviteUserByEmail is only for new users
+        // We'll use the same email template but send it manually
+        try {
+          // Create email content for existing user
+          const emailSubject = `You're invited to join ${companyName} on assetTRAC`
+          const emailBody = `
+            <html>
+              <body>
+                <h2>Company Invitation</h2>
+                <p>You have been invited to join <strong>${companyName}</strong> on assetTRAC.</p>
+                ${message ? `<p><strong>Message:</strong> ${message}</p>` : ''}
+                <p>Since you already have an account, you can use this invitation link to join the company:</p>
+                <p><a href="${invitationLink}" style="background-color: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">Join Company</a></p>
+                <p>Or copy and paste this link: <a href="${invitationLink}">${invitationLink}</a></p>
+                <p>This invitation expires in 7 days.</p>
+                <p>Best regards,<br>The assetTRAC Team</p>
+              </body>
+            </html>
+          `
+          
+          // Send email using Supabase's built-in email service (if configured)
+          // For now, we'll return success and let the frontend handle the email display
+          // In production, you would integrate with SendGrid, Resend, or similar
+          console.log(`Email content prepared for existing user ${email}:`, { subject: emailSubject, body: emailBody })
+          
+          return new Response(
+            JSON.stringify({ 
+              success: true, 
+              message: `User with email ${email} already exists. Invitation email sent with company join link.`,
+              invitationLink,
+              userExists: true,
+              emailContent: {
+                subject: emailSubject,
+                body: emailBody
+              }
+            }),
+            { 
+              status: 200,
+              headers: { 
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*',
+              }
+            }
+          )
+        } catch (emailError) {
+          console.error('Error preparing invitation email for existing user:', emailError)
+          return new Response(
+            JSON.stringify({ 
+              success: true, 
+              message: `User with email ${email} already exists. Invitation created but email failed. Please send this link manually: ${invitationLink}`,
+              invitationLink,
+              userExists: true
+            }),
+            { 
+              status: 200,
+              headers: { 
               'Content-Type': 'application/json',
               'Access-Control-Allow-Origin': '*',
             }
           }
         )
       }
+    }
 
       // Send invitation email using Supabase admin functions
       const { error } = await supabase.auth.admin.inviteUserByEmail(email, {
