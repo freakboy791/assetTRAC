@@ -53,10 +53,56 @@ export default function ResetPasswordPage() {
       if (error) {
         setMessage(`Password update error: ${error.message}`)
       } else {
-        setMessage('Password updated successfully! Redirecting to dashboard...')
-        setTimeout(() => {
-          router.push('/dashboard')
-        }, 2000)
+        setMessage('Password updated successfully! Checking your account status...')
+        
+        // Check user's role and company status before redirecting
+        try {
+          const { data: { user: currentUser } } = await supabase.auth.getUser()
+          
+          if (currentUser) {
+            // Check if user has company associations
+            const { data: companyAssociations } = await supabase
+              .from('company_users')
+              .select('*')
+              .eq('user_id', currentUser.id)
+
+            // Check if user has admin role
+            const { data: userRoleData } = await supabase
+              .from('user_roles')
+              .select('role')
+              .eq('user_id', currentUser.id)
+              .eq('role', 'admin')
+              .single()
+
+            if (userRoleData && userRoleData.role === 'admin') {
+              // Admin user - redirect to dashboard
+              setTimeout(() => {
+                router.push('/dashboard')
+              }, 2000)
+            } else if (companyAssociations && companyAssociations.length > 0) {
+              // User has company - redirect to dashboard
+              setTimeout(() => {
+                router.push('/dashboard')
+              }, 2000)
+            } else {
+              // No company - redirect to company creation
+              setTimeout(() => {
+                router.push('/company/create')
+              }, 2000)
+            }
+          } else {
+            // Fallback to dashboard
+            setTimeout(() => {
+              router.push('/dashboard')
+            }, 2000)
+          }
+        } catch (redirectError) {
+          console.error('Error checking user status:', redirectError)
+          // Fallback to dashboard
+          setTimeout(() => {
+            router.push('/dashboard')
+          }, 2000)
+        }
       }
     } catch (error) {
       console.error('Unexpected error during password reset:', error)

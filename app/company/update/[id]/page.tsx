@@ -2,15 +2,20 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabaseClient'
-import { useRouter } from 'next/navigation'
+import { useRouter, useParams } from 'next/navigation'
 import { User } from '@supabase/supabase-js'
+import { Company } from '@/types'
 
-export default function CreateCompanyPage() {
+export default function UpdateCompanyPage() {
   const [user, setUser] = useState<User | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [message, setMessage] = useState('')
+  const [company, setCompany] = useState<Company | null>(null)
   const [userRole, setUserRole] = useState<string>('')
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState('')
   const router = useRouter()
+  const params = useParams()
+  const companyId = params.id as string
 
   // Form fields
   const [companyData, setCompanyData] = useState({
@@ -26,30 +31,10 @@ export default function CreateCompanyPage() {
   })
 
   useEffect(() => {
-    checkAuth()
-    checkForInvitationData()
-  }, [])
+    checkAuthAndLoadCompany()
+  }, [companyId])
 
-  const checkForInvitationData = () => {
-    // Check if we have invitation data in localStorage (from the invite acceptance flow)
-    try {
-      const invitationData = localStorage.getItem('invitationData')
-      if (invitationData) {
-        const parsed = JSON.parse(invitationData)
-        setCompanyData(prev => ({
-          ...prev,
-          name: parsed.company_name || '',
-          email: parsed.invited_email || ''
-        }))
-        // Clear the data after using it
-        localStorage.removeItem('invitationData')
-      }
-    } catch (error) {
-      console.log('No invitation data found or error parsing:', error)
-    }
-  }
-
-  const checkAuth = async () => {
+  const checkAuthAndLoadCompany = async () => {
     try {
       // Check if user has an active session
       const { data: { session }, error: sessionError } = await supabase.auth.getSession()
@@ -63,63 +48,79 @@ export default function CreateCompanyPage() {
       const currentUser = session.user
       if (!currentUser) {
         console.log('No user in session, redirecting to login')
+        router.push('/')
         return
       }
 
       setUser(currentUser)
 
-      // Pre-fill the email field with the user's email if not already set
-      setCompanyData(prev => ({ 
-        ...prev, 
-        email: prev.email || currentUser.email || '' 
-      }))
-
-      // Check user role FIRST before checking company
-      const { data: userRoleData, error: roleError } = await supabase
-        .from('user_roles')
+      // Check user's role for this company
+      const { data: companyUser, error: companyUserError } = await supabase
+        .from('company_users')
         .select('role')
         .eq('user_id', currentUser.id)
+        .eq('company_id', companyId)
         .single()
 
-      console.log('User role check:', { userRoleData, roleError, currentUser: currentUser.id })
-
-      if (roleError || !userRoleData) {
-        // No role found - assume owner (first time user)
-        console.log('No role found, assuming owner')
-        setUserRole('owner')
-      } else if (userRoleData.role === 'admin') {
-        // Admin users cannot create companies - redirect to admin dashboard
-        console.log('Admin user detected, redirecting to dashboard')
-        router.push('/dashboard')
+      if (companyUserError || !companyUser) {
+        setMessage('You do not have access to this company')
         return
-      } else {
-        // Set the user's role
-        console.log('User role set to:', userRoleData.role)
-        setUserRole(userRoleData.role)
       }
 
-      // Only check for existing company if user is not admin
-      if (userRoleData && userRoleData.role !== 'admin') {
-        const { data: existingCompany, error: companyError } = await supabase
-          .from('company_users')
-          .select('*')
-          .eq('user_id', currentUser.id)
-
-        if (companyError) {
-          console.error('Error checking existing company:', companyError)
-          return
-        }
-
-        if (existingCompany && existingCompany.length > 0) {
-          // User already has a company, redirect to dashboard
-          router.push('/dashboard')
-          return
-        }
+      // Only owners can update company information
+      if (companyUser.role !== 'owner') {
+        setMessage('Only company owners can update company information')
+        return
       }
 
+      setUserRole(companyUser.role)
+
+      // Load company data
+      await loadCompanyData()
     } catch (error) {
       console.error('Error checking auth:', error)
       router.push('/')
+    }
+  }
+
+  const loadCompanyData = async () => {
+    try {
+      // Fetch company data
+      const { data: company, error: companyError } = await supabase
+        .from('companies')
+        .select('*')
+        .eq('id', companyId)
+        .single()
+
+      if (companyError) {
+        setMessage(`Error loading company: ${companyError.message}`)
+        return
+      }
+
+      if (!company) {
+        setMessage('Company not found')
+        return
+      }
+
+      setCompany(company)
+
+      // Pre-fill form with existing data
+      setCompanyData({
+        name: company.name || '',
+        depreciation_rate: company.depreciation_rate?.toString() || '',
+        street: company.street || '',
+        city: company.city || '',
+        state: company.state || '',
+        zip: company.zip || '',
+        phone: company.phone || '',
+        email: company.email || '',
+        note: company.note || ''
+      })
+    } catch (error) {
+      console.error('Error loading company:', error)
+      setMessage('An unexpected error occurred while loading company data')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -139,20 +140,20 @@ export default function CreateCompanyPage() {
       return
     }
 
-    // Only owners can create companies
+    // Double-check that user is owner
     if (userRole !== 'owner') {
-      setMessage('Only company owners can create companies')
+      setMessage('Only company owners can update company information')
       return
     }
 
-    setLoading(true)
+    setSaving(true)
     setMessage('')
 
     try {
-      // Insert company into companies table
-      const { data: company, error: companyError } = await supabase
+      // Update company in database
+      const { error: updateError } = await supabase
         .from('companies')
-        .insert([{
+        .update({
           name: companyData.name.trim(),
           depreciation_rate: companyData.depreciation_rate ? parseFloat(companyData.depreciation_rate) : null,
           street: companyData.street.trim() || null,
@@ -162,49 +163,45 @@ export default function CreateCompanyPage() {
           phone: companyData.phone.trim() || null,
           email: companyData.email.trim() || null,
           note: companyData.note.trim() || null
-        }])
-        .select()
-        .single()
+        })
+        .eq('id', companyId)
 
-      if (companyError) {
-        setMessage(`Error creating company: ${companyError.message}`)
-        return
-      }
-
-      // Create user-company association with owner role
-      const { error: associationError } = await supabase
-        .from('company_users')
-        .insert([{
-          user_id: user!.id, // user is guaranteed to exist here due to checkAuth
-          company_id: company.id,
-          role: 'owner' // Default role for company creator
-        }])
-
-      if (associationError) {
-        setMessage(`Error creating user-company association: ${associationError.message}`)
+      if (updateError) {
+        setMessage(`Error updating company: ${updateError.message}`)
         return
       }
 
       // Success - redirect to dashboard
-      setMessage('Company created successfully! Redirecting to dashboard...')
+      setMessage('Company updated successfully! Redirecting to dashboard...')
       setTimeout(() => {
         router.push('/dashboard')
       }, 2000)
 
     } catch (error) {
-      console.error('Error creating company:', error)
+      console.error('Error updating company:', error)
       setMessage('An unexpected error occurred')
     } finally {
-      setLoading(false)
+      setSaving(false)
     }
   }
 
-  if (!user) {
-    return null // Will redirect to login
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading company data...</p>
+        </div>
+      </div>
+    )
   }
 
-  // Show error message if user cannot create company
-  if (userRole === 'admin') {
+  if (!user || !company) {
+    return null // Will redirect to login or show error
+  }
+
+  // Show error message if user cannot update company
+  if (userRole !== 'owner') {
     return (
       <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-2xl mx-auto">
@@ -216,10 +213,10 @@ export default function CreateCompanyPage() {
               assetTRAC
             </h1>
             <h2 className="mt-4 text-2xl font-bold text-gray-900">Access Denied</h2>
-            <p className="mt-2 text-sm text-gray-600">Admin users cannot create companies</p>
+            <p className="mt-2 text-sm text-gray-600">Only company owners can update company information</p>
           </div>
           <div className="bg-white shadow rounded-lg p-6 sm:p-8 text-center">
-            <p className="text-gray-600 mb-6">You are logged in as an admin user. Admin users cannot create companies.</p>
+            <p className="text-gray-600 mb-6">You do not have permission to update company information. Only company owners can make changes.</p>
             <button
               onClick={() => router.push('/dashboard')}
               className="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm hover:bg-indigo-700 transition-colors"
@@ -243,8 +240,8 @@ export default function CreateCompanyPage() {
           <h1 className="text-3xl font-extrabold text-gray-900 bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
             assetTRAC
           </h1>
-          <h2 className="mt-4 text-2xl font-bold text-gray-900">Create Your Company</h2>
-          <p className="mt-2 text-sm text-gray-600">Set up your company profile to get started</p>
+          <h2 className="mt-4 text-2xl font-bold text-gray-900">Update Company</h2>
+          <p className="mt-2 text-sm text-gray-600">Edit your company profile information</p>
         </div>
 
         {/* Form */}
@@ -253,7 +250,7 @@ export default function CreateCompanyPage() {
             {/* Company Name - Required */}
             <div>
               <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
-                Company Name * {companyData.name && <span className="text-xs text-gray-500">(from invitation)</span>}
+                Company Name *
               </label>
               <input
                 type="text"
@@ -262,17 +259,9 @@ export default function CreateCompanyPage() {
                 required
                 value={companyData.name}
                 onChange={handleInputChange}
-                readOnly={!!companyData.name}
-                className={`w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 ${
-                  companyData.name ? 'bg-gray-50 cursor-not-allowed' : ''
-                }`}
-                placeholder={companyData.name ? companyData.name : "Enter company name from your invitation"}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="Enter company name"
               />
-              {companyData.name ? (
-                <p className="mt-1 text-xs text-gray-500">Company name pre-filled from your invitation</p>
-              ) : (
-                <p className="mt-1 text-xs text-gray-500">This should match the company name from your invitation</p>
-              )}
             </div>
 
             {/* Depreciation Rate */}
@@ -372,24 +361,17 @@ export default function CreateCompanyPage() {
               </div>
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                  Email {companyData.email && <span className="text-xs text-gray-500">(from invitation)</span>}
+                  Email
                 </label>
                 <input
                   type="email"
                   id="email"
                   name="email"
                   value={companyData.email}
-                  readOnly={!!companyData.email}
-                  className={`w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 ${
-                    companyData.email ? 'bg-gray-50 text-gray-700 cursor-not-allowed' : ''
-                  }`}
-                  placeholder={companyData.email || "company@example.com"}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                  placeholder="company@example.com"
                 />
-                {companyData.email ? (
-                  <p className="mt-1 text-xs text-gray-500">This email is pre-filled from your invitation and cannot be changed</p>
-                ) : (
-                  <p className="mt-1 text-xs text-gray-500">Enter the company email address</p>
-                )}
               </div>
             </div>
 
@@ -420,10 +402,10 @@ export default function CreateCompanyPage() {
               </button>
               <button
                 type="submit"
-                disabled={loading}
+                disabled={saving}
                 className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {loading ? 'Creating...' : 'Create Company'}
+                {saving ? 'Updating...' : 'Update Company'}
               </button>
             </div>
 
@@ -443,4 +425,3 @@ export default function CreateCompanyPage() {
     </div>
   )
 }
-

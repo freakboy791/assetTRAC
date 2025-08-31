@@ -45,9 +45,46 @@ export default function AuthPage() {
           setMessage(`Log in error: ${error.message}`)
         }
       } else {
-        setMessage('Successfully logged in!')
-        // Redirect to dashboard or home page
-        window.location.href = '/'
+        setMessage('Successfully logged in! Checking your account status...')
+        
+        // Check user's role and company status before redirecting
+        try {
+          const { data: { user: currentUser } } = await supabase.auth.getUser()
+          
+          if (currentUser) {
+            // Check if user has company associations
+            const { data: companyAssociations } = await supabase
+              .from('company_users')
+              .select('*')
+              .eq('user_id', currentUser.id)
+
+            // Check if user has admin role
+            const { data: userRoleData } = await supabase
+              .from('user_roles')
+              .select('role')
+              .eq('user_id', currentUser.id)
+              .eq('role', 'admin')
+              .single()
+
+            if (userRoleData && userRoleData.role === 'admin') {
+              // Admin user - redirect to dashboard
+              window.location.href = '/dashboard'
+            } else if (companyAssociations && companyAssociations.length > 0) {
+              // User has company - redirect to dashboard
+              window.location.href = '/dashboard'
+            } else {
+              // No company - redirect to company creation
+              window.location.href = '/company/create'
+            }
+          } else {
+            // Fallback to home page
+            window.location.href = '/'
+          }
+        } catch (redirectError) {
+          console.error('Error checking user status:', redirectError)
+          // Fallback to home page
+          window.location.href = '/'
+        }
       }
     } catch (error) {
       setMessage(`Unexpected error: ${error}`)
@@ -67,7 +104,7 @@ export default function AuthPage() {
 
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `https://assettrac.vercel.app/auth/reset-password`
+        redirectTo: `${window.location.origin}/auth/reset-password`
       })
 
       if (error) {
