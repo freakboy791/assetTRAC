@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { useRouter, useParams } from 'next/navigation'
 import { User } from '@supabase/supabase-js'
@@ -30,11 +30,48 @@ export default function UpdateCompanyPage() {
     note: ''
   })
 
-  useEffect(() => {
-    checkAuthAndLoadCompany()
+  const loadCompanyData = useCallback(async () => {
+    try {
+      // Fetch company data
+      const { data: company, error: companyError } = await supabase
+        .from('companies')
+        .select('*')
+        .eq('id', companyId)
+        .single()
+
+      if (companyError) {
+        setMessage(`Error loading company: ${companyError.message}`)
+        return
+      }
+
+      if (!company) {
+        setMessage('Company not found')
+        return
+      }
+
+      setCompany(company)
+
+      // Pre-fill form with existing data
+      setCompanyData({
+        name: company.name || '',
+        depreciation_rate: company.depreciation_rate?.toString() || '',
+        street: company.street || '',
+        city: company.city || '',
+        state: company.state || '',
+        zip: company.zip || '',
+        phone: company.phone || '',
+        email: company.email || '',
+        note: company.note || ''
+      })
+    } catch (error) {
+      console.error('Error loading company:', error)
+      setMessage('An unexpected error occurred while loading company data')
+    } finally {
+      setLoading(false)
+    }
   }, [companyId])
 
-  const checkAuthAndLoadCompany = async () => {
+  const checkAuthAndLoadCompany = useCallback(async () => {
     try {
       // Check if user has an active session
       const { data: { session }, error: sessionError } = await supabase.auth.getSession()
@@ -81,48 +118,13 @@ export default function UpdateCompanyPage() {
       console.error('Error checking auth:', error)
       router.push('/')
     }
-  }
+  }, [companyId, router, loadCompanyData])
 
-  const loadCompanyData = async () => {
-    try {
-      // Fetch company data
-      const { data: company, error: companyError } = await supabase
-        .from('companies')
-        .select('*')
-        .eq('id', companyId)
-        .single()
 
-      if (companyError) {
-        setMessage(`Error loading company: ${companyError.message}`)
-        return
-      }
 
-      if (!company) {
-        setMessage('Company not found')
-        return
-      }
-
-      setCompany(company)
-
-      // Pre-fill form with existing data
-      setCompanyData({
-        name: company.name || '',
-        depreciation_rate: company.depreciation_rate?.toString() || '',
-        street: company.street || '',
-        city: company.city || '',
-        state: company.state || '',
-        zip: company.zip || '',
-        phone: company.phone || '',
-        email: company.email || '',
-        note: company.note || ''
-      })
-    } catch (error) {
-      console.error('Error loading company:', error)
-      setMessage('An unexpected error occurred while loading company data')
-    } finally {
-      setLoading(false)
-    }
-  }
+  useEffect(() => {
+    checkAuthAndLoadCompany()
+  }, [companyId, checkAuthAndLoadCompany])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target

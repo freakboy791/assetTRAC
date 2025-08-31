@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { useRouter, useParams } from 'next/navigation'
 
@@ -38,11 +38,7 @@ export default function AcceptInvitationPage() {
   const params = useParams()
   const token = params.token as string
 
-  useEffect(() => {
-    validateInvitation()
-  }, [token])
-
-  const validateInvitation = async () => {
+  const validateInvitation = useCallback(async () => {
     try {
       // Fetch invitation details
       const { data: invitationData, error: inviteError } = await supabase
@@ -83,7 +79,11 @@ export default function AcceptInvitationPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [token])
+
+  useEffect(() => {
+    validateInvitation()
+  }, [token, validateInvitation])
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -103,7 +103,7 @@ export default function AcceptInvitationPage() {
 
     try {
       // Check if user already exists
-      const { data: existingUser, error: userCheckError } = await supabase.auth.signInWithPassword({
+      const { data: existingUser } = await supabase.auth.signInWithPassword({
         email: signupData.email,
         password: signupData.password
       })

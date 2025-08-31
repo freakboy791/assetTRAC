@@ -1,50 +1,31 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { useRouter } from 'next/navigation'
 import { User } from '@supabase/supabase-js'
-import { Company, CompanyAssociation } from '@/types'
+import { Company, Profile } from '@/types'
 
 export default function DashboardPage() {
   const [user, setUser] = useState<User | null>(null)
   const [company, setCompany] = useState<Company | null>(null)
-  const [allCompanies, setAllCompanies] = useState<Company[]>([])
+
   const [userRole, setUserRole] = useState<string>('')
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
-  const [pendingApprovals, setPendingApprovals] = useState<any[]>([])
+  const [pendingApprovals, setPendingApprovals] = useState<Profile[]>([])
   const router = useRouter()
 
-  useEffect(() => {
-    let isMounted = true
-    
-    const runAuthCheck = async () => {
-      // Only run auth check if we're actually on the dashboard page
-      if (isMounted && typeof window !== 'undefined' && window.location.pathname === '/dashboard') {
-        await checkAuthAndCompany()
-      }
-    }
-    
-    runAuthCheck()
-    
-    return () => {
-      isMounted = false
-    }
-  }, [])
 
-  useEffect(() => {
-    if (userRole === 'admin') {
-      fetchPendingApprovals()
-    }
-  }, [userRole])
+
+
 
   // Debug: Log when userRole changes
   useEffect(() => {
     console.log('userRole state changed to:', userRole)
   }, [userRole])
 
-  const checkAuthAndCompany = async () => {
+  const checkAuthAndCompany = useCallback(async () => {
     try {
       // Check if user has an active session
       const { data: { session }, error: sessionError } = await supabase.auth.getSession()
@@ -123,7 +104,7 @@ export default function DashboardPage() {
         }
       } else if (companyAssociations.length > 1) {
         // Multiple company associations - show company selector
-        setAllCompanies(companyAssociations.map((assoc: CompanyAssociation) => assoc.companies))
+
         setCompany(companyAssociations[0].companies) // Default to first company
         
         // Check if user has admin role FIRST
@@ -153,15 +134,24 @@ export default function DashboardPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [router])
 
-  const handleCompanyChange = (companyId: string) => {
-    const selectedCompany = allCompanies.find(c => c.id === companyId)
-    if (selectedCompany) {
-      setCompany(selectedCompany)
-      setMessage(`Switched to: ${selectedCompany.name}`)
+  useEffect(() => {
+    let isMounted = true
+    
+    const runAuthCheck = async () => {
+      // Only run auth check if we're actually on the dashboard page
+      if (isMounted && typeof window !== 'undefined' && window.location.pathname === '/dashboard') {
+        await checkAuthAndCompany()
+      }
     }
-  }
+    
+    runAuthCheck()
+    
+    return () => {
+      isMounted = false
+    }
+  }, [checkAuthAndCompany])
 
   const handleSignOut = async () => {
     try {
@@ -176,7 +166,7 @@ export default function DashboardPage() {
     router.push('/admin/invite')
   }
 
-  const fetchPendingApprovals = async () => {
+  const fetchPendingApprovals = useCallback(async () => {
     if (userRole === 'admin') {
       try {
         console.log('Fetching pending approvals...')
@@ -199,7 +189,13 @@ export default function DashboardPage() {
         console.error('Error in fetchPendingApprovals:', error)
       }
     }
-  }
+  }, [userRole])
+
+  useEffect(() => {
+    if (userRole === 'admin') {
+      fetchPendingApprovals()
+    }
+  }, [userRole, fetchPendingApprovals])
 
   const handleApproveUser = async (userId: string) => {
     try {

@@ -28,7 +28,7 @@ const supabaseAdmin = supabaseServiceKey ? createClient(supabaseUrl, supabaseSer
 export { supabase, supabaseAdmin }
 
 // Function to handle auth errors and clear invalid tokens
-export const handleAuthError = async (error: any) => {
+export const handleAuthError = async (error: { message?: string }) => {
   if (error.message?.includes('Invalid Refresh Token') || error.message?.includes('Refresh Token Not Found')) {
     // Clear invalid session
     await supabase.auth.signOut()

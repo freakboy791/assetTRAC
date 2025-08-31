@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { useRouter } from 'next/navigation'
 
@@ -9,11 +9,7 @@ export default function EmailConfirmationPage() {
   const [loading, setLoading] = useState(true)
   const router = useRouter()
 
-  useEffect(() => {
-    handleEmailConfirmation()
-  }, [])
-
-  const handleEmailConfirmation = async () => {
+  const handleEmailConfirmation = useCallback(async () => {
     try {
       // Get the session from the URL hash
       const hash = window.location.hash
@@ -76,7 +72,11 @@ export default function EmailConfirmationPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [router])
+
+  useEffect(() => {
+    handleEmailConfirmation()
+  }, [handleEmailConfirmation])
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">

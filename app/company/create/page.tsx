@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { useRouter } from 'next/navigation'
 import { User } from '@supabase/supabase-js'
@@ -25,12 +25,7 @@ export default function CreateCompanyPage() {
     note: ''
   })
 
-  useEffect(() => {
-    checkAuth()
-    checkForInvitationData()
-  }, [])
-
-  const checkForInvitationData = () => {
+  const checkForInvitationData = useCallback(() => {
     // Check if we have invitation data in localStorage (from the invite acceptance flow)
     try {
       const invitationData = localStorage.getItem('invitationData')
@@ -47,9 +42,9 @@ export default function CreateCompanyPage() {
     } catch (error) {
       console.log('No invitation data found or error parsing:', error)
     }
-  }
+  }, [])
 
-  const checkAuth = async () => {
+  const checkAuth = useCallback(async () => {
     try {
       // Check if user has an active session
       const { data: { session }, error: sessionError } = await supabase.auth.getSession()
@@ -121,7 +116,12 @@ export default function CreateCompanyPage() {
       console.error('Error checking auth:', error)
       router.push('/')
     }
-  }
+  }, [router])
+
+  useEffect(() => {
+    checkAuth()
+    checkForInvitationData()
+  }, [checkAuth, checkForInvitationData])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
