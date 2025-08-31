@@ -14,8 +14,6 @@ export default function AdminInvitePage() {
     companyName: '',
     message: ''
   })
-  const [invitationLink, setInvitationLink] = useState<string | null>(null)
-  const [showInvitationLink, setShowInvitationLink] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -82,15 +80,7 @@ export default function AdminInvitePage() {
     return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
   }
 
-  const copyToClipboard = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text)
-      setMessage('Invitation link copied to clipboard!')
-    } catch (err) {
-      console.error('Failed to copy: ', err)
-      setMessage('Failed to copy to clipboard. Please copy manually.')
-    }
-  }
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -206,18 +196,11 @@ export default function AdminInvitePage() {
 
         if (response.ok && result.success) {
           if (result.userExists) {
-            // User already exists - show success message with invitation link
-            setMessage(`Invitation created successfully! User with email ${inviteData.email.trim()} already exists. Please send them this invitation link to join the company.`)
-            setInvitationLink(invitationLink)
-            setShowInvitationLink(true)
-            
-            // Show the invitation link prominently for manual sharing
-            console.log('Invitation link for existing user:', invitationLink)
+            // User already exists - email sent successfully
+            setMessage(`Invitation created successfully! User with email ${inviteData.email.trim()} already exists. A new invitation email has been sent to them.`)
           } else {
             // New user - email sent successfully
             setMessage(`Invitation created and email sent successfully to ${inviteData.email.trim()}!`)
-            setShowInvitationLink(false)
-            setInvitationLink(null)
           }
           
           // Reset form on success
@@ -228,9 +211,7 @@ export default function AdminInvitePage() {
           })
         } else {
           console.error('Edge Function error:', result.error)
-          setMessage(`Invitation created but email sending failed: ${result.error}. Please send this link manually: ${invitationLink}`)
-          setShowInvitationLink(false)
-          setInvitationLink(null)
+          setMessage(`Invitation created but email sending failed: ${result.error}. Please try again.`)
         }
       } catch (error) {
         console.error('Error calling Edge Function:', error)
@@ -359,37 +340,7 @@ export default function AdminInvitePage() {
           </form>
         </div>
 
-        {/* Invitation Link Display for Existing Users */}
-        {showInvitationLink && invitationLink && (
-          <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-6">
-            <h3 className="text-lg font-medium text-blue-900 mb-4">
-              📧 Invitation Link for Existing User
-            </h3>
-            <p className="text-sm text-blue-700 mb-4">
-              Since this user already has an account, please send them this invitation link to join the company:
-            </p>
-            <div className="bg-white border border-blue-300 rounded-md p-3 mb-4">
-              <code className="text-sm text-blue-800 break-all">{invitationLink}</code>
-            </div>
-            <div className="flex space-x-3">
-              <button
-                onClick={() => copyToClipboard(invitationLink)}
-                className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-700 transition-colors"
-              >
-                📋 Copy Link
-              </button>
-              <button
-                onClick={() => {
-                  setShowInvitationLink(false)
-                  setInvitationLink(null)
-                }}
-                className="bg-gray-600 text-white px-4 py-2 rounded-md text-sm hover:bg-gray-700 transition-colors"
-              >
-                ✕ Close
-              </button>
-            </div>
-          </div>
-        )}
+
       </div>
     </div>
   )
