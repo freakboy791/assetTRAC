@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { useRouter } from 'next/navigation'
 import { User } from '@supabase/supabase-js'
-import { Company, Profile } from '@/types'
+import { Company } from '@/types'
 
 export default function DashboardPage() {
   const [user, setUser] = useState<User | null>(null)
@@ -13,7 +13,20 @@ export default function DashboardPage() {
   const [userRole, setUserRole] = useState<string>('')
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
-  const [pendingApprovals, setPendingApprovals] = useState<Profile[]>([])
+  const [showSuccessModal, setShowSuccessModal] = useState(false)
+  const [successMessage, setSuccessMessage] = useState('')
+  const [pendingInvitations, setPendingInvitations] = useState<Array<{
+    id: string
+    invited_email: string
+    company_name: string
+    role: string
+    created_at: string
+    accepted: boolean
+    used: boolean
+    expires_at: string | null
+    message: string | null
+    token: string
+  }>>([])
   const router = useRouter()
 
 
@@ -153,6 +166,8 @@ export default function DashboardPage() {
     }
   }, [checkAuthAndCompany])
 
+
+
   const handleSignOut = async () => {
     try {
       await supabase.auth.signOut()
@@ -166,56 +181,69 @@ export default function DashboardPage() {
     router.push('/admin/invite')
   }
 
-  const fetchPendingApprovals = useCallback(async () => {
+  const fetchPendingInvitations = useCallback(async () => {
     if (userRole === 'admin') {
       try {
-        console.log('Fetching pending approvals...')
-        const { data: pendingUsers, error } = await supabase
-          .from('profiles')
+        console.log('Fetching pending invitations...')
+        const { data: invitations, error } = await supabase
+          .from('invites')
           .select('*')
-          .eq('is_approved', false)
-          .eq('email_verified', true)
+          .eq('used', false)
           .order('created_at', { ascending: false })
 
-        console.log('Pending approvals query result:', { data: pendingUsers, error })
+        console.log('Pending invitations query result:', { data: invitations, error })
 
         if (error) {
-          console.error('Error fetching pending approvals:', error)
+          console.error('Error fetching pending invitations:', error)
           console.error('Error details:', error.message, error.code, error.details)
         } else {
-          setPendingApprovals(pendingUsers || [])
+          setPendingInvitations(invitations || [])
         }
       } catch (error) {
-        console.error('Error in fetchPendingApprovals:', error)
+        console.error('Error in fetchPendingInvitations:', error)
       }
     }
   }, [userRole])
 
   useEffect(() => {
     if (userRole === 'admin') {
-      fetchPendingApprovals()
+      fetchPendingInvitations()
     }
-  }, [userRole, fetchPendingApprovals])
+  }, [userRole, fetchPendingInvitations])
 
-  const handleApproveUser = async (userId: string) => {
+  // Refresh invitations when success modal closes
+  useEffect(() => {
+    if (!showSuccessModal && userRole === 'admin') {
+      fetchPendingInvitations()
+    }
+  }, [showSuccessModal, userRole, fetchPendingInvitations])
+
+  const handleApproveInvitation = async (invitationId: string) => {
     try {
       const { error } = await supabase
-        .from('profiles')
+        .from('invites')
         .update({ 
-          is_approved: true, 
-          approved_by: user!.id, 
-          approved_at: new Date().toISOString() 
+          accepted: true
         })
-        .eq('id', userId)
+        .eq('id', invitationId)
 
       if (error) {
-        setMessage(`Error approving user: ${error.message}`)
+        setMessage(`Error approving invitation: ${error.message}`)
       } else {
-        setMessage('User approved successfully!')
-        fetchPendingApprovals() // Refresh the list
+        // Show success modal
+        setSuccessMessage('Invitation approved successfully!')
+        setShowSuccessModal(true)
+        
+        // Refresh the list immediately to show updated status
+        console.log('Refreshing invitations list after approval...')
+        await fetchPendingInvitations()
+        console.log('Invitations list refreshed')
+        
+        // Force a re-render by updating state
+        setPendingInvitations(prev => [...prev])
       }
     } catch (error) {
-      console.error('Error approving user:', error)
+      console.error('Error approving invitation:', error)
       setMessage('An unexpected error occurred')
     }
   }
@@ -274,34 +302,136 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* Pending Approvals Section */}
+          {/* Pending Invitations Section */}
           <div className="bg-white shadow rounded-lg p-6 mb-6">
-            <h2 className="text-lg font-medium text-gray-900 mb-4">Pending User Approvals</h2>
-            {pendingApprovals.length === 0 ? (
-              <p className="text-gray-500">No pending approvals</p>
+            <h2 className="text-lg font-medium text-gray-900 mb-4">Pending Invitations</h2>
+            {pendingInvitations.length === 0 ? (
+              <p className="text-gray-500">No pending invitations</p>
             ) : (
               <div className="space-y-4">
-                {pendingApprovals.map((pendingUser) => (
-                  <div key={pendingUser.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                    <div>
-                      <p className="font-medium text-gray-900">{pendingUser.email}</p>
-                      <p className="text-sm text-gray-500">Created: {new Date(pendingUser.created_at).toLocaleDateString()}</p>
+                {pendingInvitations.map((invitation) => (
+                  <div key={invitation.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-4">
+                        <div>
+                          <p className="font-medium text-gray-900">{invitation.invited_email}</p>
+                          <p className="text-sm text-gray-500">Company: {invitation.company_name}</p>
+                          <p className="text-sm text-gray-500">Role: {invitation.role}</p>
+                          <p className="text-sm text-gray-500">Created: {new Date(invitation.created_at).toLocaleDateString()}</p>
+                        </div>
+                        <div className="ml-4">
+                                                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                             invitation.used 
+                               ? 'bg-gray-100 text-gray-800' 
+                               : invitation.accepted 
+                               ? 'bg-green-100 text-green-800' 
+                               : invitation.expires_at && new Date(invitation.expires_at) < new Date()
+                               ? 'bg-red-100 text-red-800'
+                               : 'bg-yellow-100 text-yellow-800'
+                           }`}>
+                             {invitation.used 
+                               ? 'Used' 
+                               : invitation.accepted 
+                               ? 'Approved' 
+                               : invitation.expires_at && new Date(invitation.expires_at) < new Date()
+                               ? 'Expired'
+                               : 'Pending'
+                             }
+                           </span>
+                        </div>
+                      </div>
+                      {invitation.message && (
+                        <p className="text-sm text-gray-600 mt-2">Message: {invitation.message}</p>
+                      )}
                     </div>
-                    <button
-                      onClick={() => handleApproveUser(pendingUser.id)}
-                      className="bg-green-600 text-white px-4 py-2 rounded-md text-sm hover:bg-green-700 transition-colors"
-                    >
-                      Approve
-                    </button>
+                    <div className="flex space-x-2">
+                                             {!invitation.used && !invitation.accepted && invitation.expires_at && new Date(invitation.expires_at) > new Date() && (
+                         <button
+                           onClick={() => handleApproveInvitation(invitation.id)}
+                           className="bg-green-600 text-white px-4 py-2 rounded-md text-sm hover:bg-green-700 transition-colors"
+                         >
+                           Approve
+                         </button>
+                       )}
+                      <button
+                        onClick={() => {
+                          // Copy invitation link to clipboard
+                          const link = `${window.location.origin}/invite/accept/${invitation.token}`
+                          navigator.clipboard.writeText(link)
+                          setMessage('Invitation link copied to clipboard!')
+                        }}
+                        className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-700 transition-colors"
+                      >
+                        Copy Link
+                      </button>
+                                             {!invitation.used && invitation.expires_at && new Date(invitation.expires_at) < new Date() && (
+                         <button
+                           onClick={async () => {
+                             try {
+                               // Call the API to resend invitation email
+                               const response = await fetch('/api/send-invite-email', {
+                                 method: 'POST',
+                                 headers: { 'Content-Type': 'application/json' },
+                                 body: JSON.stringify({
+                                   email: invitation.invited_email,
+                                   companyName: invitation.company_name,
+                                   message: invitation.message || '',
+                                   role: invitation.role
+                                 })
+                               })
+                               
+                               if (response.ok) {
+                                 setMessage('Invitation email resent successfully!')
+                                 fetchPendingInvitations() // Refresh the list
+                               } else {
+                                 setMessage('Failed to resend invitation email. Please try again.')
+                               }
+                             } catch (error) {
+                               console.error('Error resending invitation:', error)
+                               setMessage('Error resending invitation. Please try again.')
+                             }
+                           }}
+                           className="bg-yellow-600 text-white px-4 py-2 rounded-md text-sm hover:bg-yellow-700 transition-colors"
+                         >
+                           Resend Email
+                         </button>
+                       )}
+                    </div>
                   </div>
                 ))}
               </div>
             )}
-          </div>
-        </main>
-      </div>
-    )
-  }
+                     </div>
+         </main>
+
+         {/* Success Modal */}
+         {showSuccessModal && (
+           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+             <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+               <div className="text-center">
+                 <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
+                   <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                   </svg>
+                 </div>
+                 <h3 className="text-lg font-medium text-gray-900 mb-2">Success!</h3>
+                 <p className="text-sm text-gray-600 mb-6">{successMessage}</p>
+                 <button
+                   onClick={() => {
+                     setShowSuccessModal(false)
+                     setSuccessMessage('')
+                   }}
+                   className="w-full bg-indigo-600 text-white px-4 py-2 rounded-md text-sm hover:bg-indigo-700 transition-colors"
+                 >
+                   Continue
+                 </button>
+               </div>
+             </div>
+           </div>
+         )}
+       </div>
+     )
+   }
 
   // Company Owner Dashboard
   if (!company) {
@@ -442,8 +572,38 @@ export default function DashboardPage() {
               <p className="text-gray-600">Your main dashboard content will appear here.</p>
             </div>
           </div>
-        </div>
-      </main>
-    </div>
-  )
-}
+                   </div>
+         </main>
+
+         {/* Success Modal */}
+         {showSuccessModal && (
+           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+             <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+               <div className="text-center">
+                 <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
+                   <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                   </svg>
+                 </div>
+                 <h3 className="text-lg font-medium text-gray-900 mb-2">Success!</h3>
+                 <p className="text-sm text-gray-600 mb-6">{successMessage}</p>
+                 <button
+                   onClick={async () => {
+                     setShowSuccessModal(false)
+                     setSuccessMessage('')
+                     // Refresh the invitations list after closing modal
+                     if (userRole === 'admin') {
+                       await fetchPendingInvitations()
+                     }
+                   }}
+                   className="w-full bg-indigo-600 text-white px-4 py-2 rounded-md text-sm hover:bg-indigo-700 transition-colors"
+                 >
+                   Continue
+                 </button>
+               </div>
+             </div>
+           </div>
+         )}
+       </div>
+     )
+   }

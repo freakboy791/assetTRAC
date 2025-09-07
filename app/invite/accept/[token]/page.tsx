@@ -34,6 +34,8 @@ export default function AcceptInvitationPage() {
     note: ''
   })
   const [message, setMessage] = useState('')
+  const [hasExistingCompany, setHasExistingCompany] = useState(false)
+  const [existingCompanyId, setExistingCompanyId] = useState<string | null>(null)
   const router = useRouter()
   const params = useParams()
   const token = params.token as string
@@ -65,6 +67,10 @@ export default function AcceptInvitationPage() {
       setSignupData(prev => ({ ...prev, email: invitationData.invited_email }))
       setCompanyData(prev => ({ ...prev, name: invitationData.company_name }))
       
+      // Debug logging
+      console.log('Invitation validated:', invitationData)
+      console.log('Signup data updated with email:', invitationData.invited_email)
+      
       // Store invitation data in localStorage for potential use in company creation page
       localStorage.setItem('invitationData', JSON.stringify({
         company_name: invitationData.company_name,
@@ -72,7 +78,7 @@ export default function AcceptInvitationPage() {
         message: invitationData.message
       }))
       
-      setStep('invitation')
+      setStep('signup')
     } catch (error) {
       console.error('Error validating invitation:', error)
       setError('An error occurred while validating the invitation')
@@ -84,6 +90,33 @@ export default function AcceptInvitationPage() {
   useEffect(() => {
     validateInvitation()
   }, [token, validateInvitation])
+
+  // Check if user already has a company when they reach the company step
+  useEffect(() => {
+    if (step === 'company') {
+      const checkExistingCompany = async () => {
+        try {
+          const { data: { user } } = await supabase.auth.getUser()
+          if (user) {
+            const { data: existingCompany } = await supabase
+              .from('company_users')
+              .select('company_id')
+              .eq('user_id', user.id)
+              .single()
+
+            if (existingCompany) {
+              setHasExistingCompany(true)
+              setExistingCompanyId(existingCompany.company_id)
+            }
+          }
+        } catch (error) {
+          console.error('Error checking existing company:', error)
+        }
+      }
+
+      checkExistingCompany()
+    }
+  }, [step])
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -118,7 +151,9 @@ export default function AcceptInvitationPage() {
           .update({ used: true })
           .eq('token', token)
 
-        setStep('company')
+        // Redirect to login with email pre-filled for password entry
+        const loginUrl = `/?email=${encodeURIComponent(signupData.email)}&token=${token}`
+        router.push(loginUrl)
         return
       }
 
@@ -140,7 +175,9 @@ export default function AcceptInvitationPage() {
           .update({ used: true })
           .eq('token', token)
 
-        setStep('company')
+        // Redirect to login with email pre-filled for password entry
+        const loginUrl = `/?email=${encodeURIComponent(signupData.email)}&token=${token}`
+        router.push(loginUrl)
       }
     } catch (error) {
       console.error('Error during signup:', error)
@@ -172,7 +209,7 @@ export default function AcceptInvitationPage() {
       // Check if user already has a company
       const { data: existingCompany, error: companyCheckError } = await supabase
         .from('company_users')
-        .select('*')
+        .select('*, companies(*)')
         .eq('user_id', user.id)
 
       if (companyCheckError) {
@@ -182,9 +219,19 @@ export default function AcceptInvitationPage() {
       let companyId: string
 
       if (existingCompany && existingCompany.length > 0) {
-        // User already has a company - use the existing one
+        // User already has a company - redirect to update company page
         companyId = existingCompany[0].company_id
-        console.log('User already has company, using existing:', companyId)
+        console.log('User already has company, redirecting to update:', companyId)
+        
+        // Mark invitation as used
+        await supabase
+          .from('invites')
+          .update({ used: true })
+          .eq('token', token)
+
+        // Redirect to update company page with existing company data
+        router.push(`/company/update/${companyId}`)
+        return
       } else {
         // Create new company
         const { data: company, error: companyError } = await supabase
@@ -355,6 +402,9 @@ export default function AcceptInvitationPage() {
   }
 
   if (step === 'signup') {
+    // Debug logging for signup step
+    console.log('Rendering signup step with data:', { signupData, invitation })
+    
     return (
       <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-2xl mx-auto">
@@ -443,6 +493,25 @@ export default function AcceptInvitationPage() {
   }
 
   if (step === 'company') {
+    // If user has existing company, redirect to update page
+    if (hasExistingCompany && existingCompanyId) {
+      // Use setTimeout to avoid React state update during render
+      setTimeout(() => {
+        router.push(`/company/update/${existingCompanyId}`)
+      }, 100)
+      
+      return (
+        <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+          <div className="max-w-2xl mx-auto">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
+              <p className="mt-4 text-gray-600">Redirecting to company update page...</p>
+            </div>
+          </div>
+        </div>
+      )
+    }
+
     return (
       <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-2xl mx-auto">

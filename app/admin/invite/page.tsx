@@ -14,6 +14,10 @@ export default function AdminInvitePage() {
     companyName: '',
     message: ''
   })
+  const [invitationLink, setInvitationLink] = useState<string | null>(null)
+  const [showInvitationLink, setShowInvitationLink] = useState(false)
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false)
+  const [successDetails, setSuccessDetails] = useState('')
   const router = useRouter()
 
   useEffect(() => {
@@ -78,6 +82,16 @@ export default function AdminInvitePage() {
 
   const generateToken = () => {
     return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
+  }
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setMessage('Invitation link copied to clipboard!')
+    } catch (err) {
+      console.error('Failed to copy: ', err)
+      setMessage('Failed to copy to clipboard. Please copy manually.')
+    }
   }
 
 
@@ -179,6 +193,13 @@ export default function AdminInvitePage() {
       setMessage('Invitation created successfully! Sending email...')
       
       try {
+        console.log('📧 Calling email API with data:', {
+          email: inviteData.email.trim(),
+          companyName: inviteData.companyName.trim(),
+          invitationLink: invitationLink,
+          message: inviteData.message.trim() || null
+        })
+        
         const response = await fetch('/api/send-invite-email', {
           method: 'POST',
           headers: {
@@ -192,15 +213,23 @@ export default function AdminInvitePage() {
           })
         })
 
+        console.log('📧 Email API response status:', response.status)
         const result = await response.json()
+        console.log('📧 Email API response:', result)
 
         if (response.ok && result.success) {
           if (result.userExists) {
-            // User already exists - email sent successfully
-            setMessage(`Invitation created successfully! User with email ${inviteData.email.trim()} already exists. A new invitation email has been sent to them.`)
+            // User already exists - show success message and invitation link
+            setSuccessDetails(result.message || `Invitation created successfully! User with email ${inviteData.email.trim()} already exists.`)
+            setInvitationLink(invitationLink)
+            setShowInvitationLink(true)
+            setShowSuccessMessage(true)
           } else {
             // New user - email sent successfully
-            setMessage(`Invitation created and email sent successfully to ${inviteData.email.trim()}!`)
+            setSuccessDetails(result.message || `Invitation created and email sent successfully to ${inviteData.email.trim()}!`)
+            setShowInvitationLink(false)
+            setInvitationLink(null)
+            setShowSuccessMessage(true)
           }
           
           // Reset form on success
@@ -219,13 +248,6 @@ export default function AdminInvitePage() {
       }
       
       console.log('Invitation link:', invitationLink)
-
-      // Reset form
-      setInviteData({
-        email: '',
-        companyName: '',
-        message: ''
-      })
 
     } catch (error) {
       console.error('Error sending invitation:', error)
@@ -323,7 +345,7 @@ export default function AdminInvitePage() {
                 disabled={loading}
                 className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {loading ? 'Creating...' : 'Create Invitation'}
+                {loading ? 'Creating Invitation...' : 'Create Invitation'}
               </button>
             </div>
 
@@ -340,7 +362,63 @@ export default function AdminInvitePage() {
           </form>
         </div>
 
+        {/* Success Message Overlay */}
+        {showSuccessMessage && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-8 max-w-md mx-4 text-center">
+              <div className="mx-auto h-16 w-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
+                <svg className="h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Invitation Sent Successfully!</h3>
+              <p className="text-sm text-gray-600 mb-6">{successDetails}</p>
+              <button
+                onClick={() => {
+                  setShowSuccessMessage(false)
+                  setShowInvitationLink(false)
+                  setInvitationLink(null)
+                  router.push('/dashboard')
+                }}
+                className="w-full bg-indigo-600 text-white px-4 py-2 rounded-md text-sm hover:bg-indigo-700 transition-colors"
+              >
+                Continue to Dashboard
+              </button>
+            </div>
+          </div>
+        )}
 
+        {/* Invitation Link Display for Existing Users */}
+        {showInvitationLink && invitationLink && (
+          <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-6">
+            <h3 className="text-lg font-medium text-blue-900 mb-4">
+              📧 Invitation Link for Existing User
+            </h3>
+            <p className="text-sm text-blue-700 mb-4">
+              Since this user already has an account, you can send them this invitation link to join the company:
+            </p>
+            <div className="bg-white border border-blue-300 rounded-md p-3 mb-4">
+              <code className="text-sm text-blue-800 break-all">{invitationLink}</code>
+            </div>
+            <div className="flex space-x-3">
+              <button
+                onClick={() => copyToClipboard(invitationLink)}
+                className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-700 transition-colors"
+              >
+                📋 Copy Link
+              </button>
+              <button
+                onClick={() => {
+                  setShowInvitationLink(false)
+                  setInvitationLink(null)
+                }}
+                className="bg-gray-600 text-white px-4 py-2 rounded-md text-sm hover:bg-gray-700 transition-colors"
+              >
+                ✕ Close
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

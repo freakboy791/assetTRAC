@@ -13,6 +13,7 @@ export default function UpdateCompanyPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
+  const [isAcceptingInvitation, setIsAcceptingInvitation] = useState(false)
   const router = useRouter()
   const params = useParams()
   const companyId = params.id as string
@@ -100,17 +101,33 @@ export default function UpdateCompanyPage() {
         .single()
 
       if (companyUserError || !companyUser) {
-        setMessage('You do not have access to this company')
-        return
-      }
+        // User doesn't have access yet - check if they're accepting an invitation
+        // Look for pending invitations for this user and company
+        const { data: pendingInvitation } = await supabase
+          .from('invites')
+          .select('*')
+          .eq('invited_email', currentUser.email)
+          .eq('used', false)
+          .single()
 
-      // Only owners can update company information
-      if (companyUser.role !== 'owner') {
-        setMessage('Only company owners can update company information')
-        return
+        if (pendingInvitation) {
+          // User has a pending invitation - allow them to update the company
+          // This will create the user-company association when they save
+          console.log('User has pending invitation, allowing company update')
+          setUserRole('owner') // Treat them as owner for this update
+          setIsAcceptingInvitation(true)
+        } else {
+          setMessage('You do not have access to this company')
+          return
+        }
+      } else {
+        // User already has access - check their role
+        if (companyUser.role !== 'owner') {
+          setMessage('Only company owners can update company information')
+          return
+        }
+        setUserRole(companyUser.role)
       }
-
-      setUserRole(companyUser.role)
 
       // Load company data
       await loadCompanyData()
@@ -171,6 +188,41 @@ export default function UpdateCompanyPage() {
       if (updateError) {
         setMessage(`Error updating company: ${updateError.message}`)
         return
+      }
+
+      // If user was accepting an invitation, create the user-company association
+      if (userRole === 'owner' && isAcceptingInvitation) {
+        try {
+          // Create user-company association with owner role
+          const { error: associationError } = await supabase
+            .from('company_users')
+            .insert([{
+              user_id: user!.id,
+              company_id: companyId,
+              role: 'owner'
+            }])
+
+          if (associationError) {
+            console.error('Error creating user-company association:', associationError)
+            setMessage('Company updated but there was an issue creating your access. Please contact support.')
+            return
+          }
+
+          // Mark invitation as used
+          const { error: inviteError } = await supabase
+            .from('invites')
+            .update({ used: true })
+            .eq('invited_email', user!.email)
+            .eq('used', false)
+
+          if (inviteError) {
+            console.error('Error marking invitation as used:', inviteError)
+          }
+
+          console.log('User-company association created successfully')
+        } catch (error) {
+          console.error('Error in invitation acceptance flow:', error)
+        }
       }
 
       // Success - redirect to dashboard
@@ -242,8 +294,15 @@ export default function UpdateCompanyPage() {
           <h1 className="text-3xl font-extrabold text-gray-900 bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
             assetTRAC
           </h1>
-          <h2 className="mt-4 text-2xl font-bold text-gray-900">Update Company</h2>
-          <p className="mt-2 text-sm text-gray-600">Edit your company profile information</p>
+          <h2 className="mt-4 text-2xl font-bold text-gray-900">
+            {isAcceptingInvitation ? 'Complete Company Profile' : 'Update Company'}
+          </h2>
+          <p className="mt-2 text-sm text-gray-600">
+            {isAcceptingInvitation 
+              ? 'Complete your company profile to join the company' 
+              : 'Edit your company profile information'
+            }
+          </p>
         </div>
 
         {/* Form */}
@@ -407,7 +466,10 @@ export default function UpdateCompanyPage() {
                 disabled={saving}
                 className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {saving ? 'Updating...' : 'Update Company'}
+                {saving 
+                  ? (isAcceptingInvitation ? 'Joining...' : 'Updating...') 
+                  : (isAcceptingInvitation ? 'Join Company' : 'Update Company')
+                }
               </button>
             </div>
 

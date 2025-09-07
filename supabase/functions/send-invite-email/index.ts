@@ -77,153 +77,16 @@ Deno.serve(async (req) => {
       )
     }
 
-          // Create Supabase admin client
-      const supabase = createClient(supabaseUrl, supabaseServiceKey)
+    // Create Supabase admin client
+    const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-      // Check if user already exists
-      const { data: existingUser, error: userCheckError } = await supabase.auth.admin.listUsers()
-      
-      if (userCheckError) {
-        console.error('Error checking existing users:', userCheckError)
-        return new Response(
-          JSON.stringify({ error: `Failed to check existing users: ${userCheckError.message}` }),
-          { 
-            status: 500,
-            headers: { 
-              'Content-Type': 'application/json',
-              'Access-Control-Allow-Origin': '*',
-            }
-          }
-        )
-      }
-
-      // Check if user with this email already exists
-      const userExists = existingUser.users.some(user => user.email === email)
-      
-      if (userExists) {
-        // User already exists - send invitation email with the invitation link
-        console.log(`User ${email} already exists, sending invitation email with link: ${invitationLink}`)
-        
-        // For existing users, we need to send a custom email since Supabase auth.inviteUserByEmail is only for new users
-        try {
-          // Create email content for existing user
-          const emailSubject = `You're invited to join ${companyName} on assetTRAC`
-          const emailBody = `
-            <html>
-              <body>
-                <h2>Company Invitation</h2>
-                <p>You have been invited to join <strong>${companyName}</strong> on assetTRAC.</p>
-                ${message ? `<p><strong>Message:</strong> ${message}</p>` : ''}
-                <p>Since you already have an account, you can use this invitation link to join the company:</p>
-                <p><a href="${invitationLink}" style="background-color: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">Join Company</a></p>
-                <p>Or copy and paste this link: <a href="${invitationLink}">${invitationLink}</a></p>
-                <p>This invitation expires in 7 days.</p>
-                <p>Best regards,<br>The assetTRAC Team</p>
-              </body>
-            </html>
-          `
-          
-          // Send email using a simple HTTP POST to an email service
-          // You can easily integrate with SendGrid, Resend, or similar services
-          try {
-            // For now, we'll simulate email sending success
-            // In production, replace this with actual email service integration
-            console.log(`Sending email to existing user ${email}:`, { subject: emailSubject, body: emailBody })
-            
-            // Try to send email using available email services
-            let emailSent = false
-            
-            // Option 1: Try using Supabase's built-in email service if configured
-            try {
-              // This would work if you have SMTP configured in Supabase
-              // For now, we'll simulate success
-              emailSent = true
-              console.log(`Email would be sent to ${email} via Supabase SMTP`)
-            } catch (supabaseEmailError) {
-              console.log('Supabase SMTP not configured, trying alternative methods')
-            }
-            
-            // Option 2: Try using a simple email service (you can easily integrate with SendGrid, Resend, etc.)
-            if (!emailSent) {
-              try {
-                // Example: Integrate with a service like EmailJS, SendGrid, or Resend
-                // For now, we'll simulate success as if email was sent
-                emailSent = true
-                console.log(`Email would be sent to ${email} via external email service`)
-              } catch (externalEmailError) {
-                console.log('External email service not configured')
-              }
-            }
-            
-            // For now, we'll assume email was sent successfully
-            // In production, you would implement actual email sending here
-            return new Response(
-              JSON.stringify({ 
-                success: true, 
-                message: `User with email ${email} already exists. Invitation email sent successfully with company join link.`,
-                invitationLink,
-                userExists: true
-              }),
-              { 
-                status: 200,
-                headers: { 
-                  'Content-Type': 'application/json',
-                  'Access-Control-Allow-Origin': '*',
-                }
-              }
-            )
-          } catch (emailSendError) {
-            console.error('Error sending email to existing user:', emailSendError)
-            return new Response(
-              JSON.stringify({ 
-                success: true, 
-                message: `User with email ${email} already exists. Invitation created but email failed. Please send this link manually: ${invitationLink}`,
-                invitationLink,
-                userExists: true
-              }),
-              { 
-                status: 200,
-                headers: { 
-                  'Content-Type': 'application/json',
-                  'Access-Control-Allow-Origin': '*',
-                }
-              }
-            )
-          }
-        } catch (emailError) {
-          console.error('Error preparing invitation email for existing user:', emailError)
-          return new Response(
-            JSON.stringify({ 
-              success: true, 
-              message: `User with email ${email} already exists. Invitation created but email failed. Please send this link manually: ${invitationLink}`,
-              invitationLink,
-              userExists: true
-            }),
-            { 
-              status: 200,
-              headers: { 
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*',
-              }
-            }
-          )
-        }
-      }
-
-      // Send invitation email using Supabase admin functions
-      const { error } = await supabase.auth.admin.inviteUserByEmail(email, {
-        data: {
-          company_name: companyName,
-          invitation_link: invitationLink,
-          custom_message: message || null,
-          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days from now
-        }
-      })
-
-    if (error) {
-      console.error('Error sending invitation email:', error)
+    // Check if user already exists
+    const { data: existingUser, error: userCheckError } = await supabase.auth.admin.listUsers()
+    
+    if (userCheckError) {
+      console.error('Error checking existing users:', userCheckError)
       return new Response(
-        JSON.stringify({ error: `Failed to send invitation email: ${error.message}` }),
+        JSON.stringify({ error: `Failed to check existing users: ${userCheckError.message}` }),
         { 
           status: 500,
           headers: { 
@@ -234,21 +97,76 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Success response
-    return new Response(
-      JSON.stringify({ 
-        success: true, 
-        message: `Invitation email sent successfully to ${email}`,
-        invitationLink 
-      }),
-      { 
-        status: 200,
-        headers: { 
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
+    // Check if user with this email already exists
+    const userExists = existingUser.users.some(user => user.email === email)
+    
+    if (userExists) {
+      // User already exists - send invitation email with the invitation link
+      console.log(`User ${email} already exists, sending invitation email with link: ${invitationLink}`)
+      
+              // For existing users, return the invitation link since we can't use inviteUserByEmail for existing users
+        console.log(`User ${email} already exists, returning invitation link for manual sending`)
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            message: `User with email ${email} already exists. Please send this invitation link manually: ${invitationLink}`,
+            invitationLink,
+            userExists: true,
+            note: "Existing users need manual invitation link sending. Please copy and send this link via email."
+          }),
+          { 
+            status: 200,
+            headers: { 
+              'Content-Type': 'application/json',
+              'Access-Control-Allow-Origin': '*',
+            }
+          }
+        )
+    }
+
+        // For new users, send custom invitation email with our invitation link
+    try {
+      console.log(`Sending custom invitation email to new user ${email}`)
+      
+      // Since we can't send emails directly from Edge Functions without a service,
+      // we'll return the invitation link for manual sending
+      // In production, you'd integrate with SendGrid, Resend, or similar
+      
+      console.log(`Custom invitation email prepared for new user ${email}`)
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: `Invitation created successfully! Please send this link manually: ${invitationLink}`,
+          invitationLink,
+          userExists: false,
+          note: "For now, please copy and send the invitation link manually. To enable automatic emails, integrate with an email service like SendGrid or Resend."
+        }),
+        { 
+          status: 200,
+          headers: { 
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+          }
         }
-      }
-    )
+      )
+    } catch (emailError) {
+      console.error('Error preparing custom invitation email:', emailError)
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: `Invitation created but email failed. Please send this link manually: ${invitationLink}`,
+          invitationLink,
+          note: "Email service error. Please copy and send the invitation link manually."
+        }),
+        { 
+          status: 200,
+          headers: { 
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+          }
+        }
+      )
+    }
 
   } catch (error) {
     console.error('Unexpected error:', error)
