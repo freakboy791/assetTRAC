@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { supabase } from '../lib/supabaseClient'
 import Link from 'next/link'
 
 export default function HomePage() {
@@ -18,16 +17,15 @@ export default function HomePage() {
   useEffect(() => {
     const checkUser = async () => {
       try {
-        // Clear any invalid sessions first
-        await supabase.auth.signOut()
+        // Check authentication via API instead of direct Supabase call
+        const response = await fetch('/api/check-user-exists')
+        const data = await response.json()
         
-        const { data: { user } } = await supabase.auth.getUser()
-        if (user) {
+        if (data.user) {
           window.location.href = '/dashboard'
         }
       } catch (error) {
-        // Force clear any invalid auth state
-        await supabase.auth.signOut()
+        // Silently handle errors
       }
     }
     checkUser()
@@ -79,51 +77,54 @@ export default function HomePage() {
 
     try {
       // First, check if there's a pending invitation for this email
-      const { data: inviteData, error: inviteError } = await supabase
-        .from('invites')
-        .select('*')
-        .eq('invited_email', email)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single()
-
-      if (inviteData) {
-        setCurrentInvite(inviteData)
-        if (inviteData.status === 'pending') {
-          // User hasn't clicked the invite link yet
-          setMessage('Account not activated. Please check your email and click the activation link to activate your account.')
-          setShowResendButton(true)
-          setLoading(false)
-          return
-        } else if (inviteData.status === 'email_confirmed' && !inviteData.admin_approved_at) {
-          // User clicked invite but admin hasn't approved yet
-          setMessage('Your account is waiting for admin approval. Please contact your administrator to approve your account.')
-          setShowResendButton(false)
-          setShowEmailAdminButton(true)
-          setLoading(false)
-          return
-        }
-      } else if (inviteError && inviteError.code !== 'PGRST116') {
-        // PGRST116 is "not found" which is expected when no invitation exists
-        setMessage('Error checking invitation status. Please try again.')
-        setLoading(false)
-        return
-      }
-
-      // If no invitation found or invitation is ready, try to sign in
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password
+      const inviteResponse = await fetch('/api/check-invitation', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
       })
 
-      if (error) {
-        if (error.message.includes('Email not confirmed')) {
+      if (inviteResponse.ok) {
+        const inviteData = await inviteResponse.json()
+        if (inviteData.invitation) {
+          setCurrentInvite(inviteData.invitation)
+          if (inviteData.invitation.status === 'pending') {
+            // User hasn't clicked the invite link yet
+            setMessage('Account not activated. Please check your email and click the activation link to activate your account.')
+            setShowResendButton(true)
+            setLoading(false)
+            return
+          } else if (inviteData.invitation.status === 'email_confirmed' && !inviteData.invitation.admin_approved_at) {
+            // User clicked invite but admin hasn't approved yet
+            setMessage('Your account is waiting for admin approval. Please contact your administrator to approve your account.')
+            setShowResendButton(false)
+            setShowEmailAdminButton(true)
+            setLoading(false)
+            return
+          }
+        }
+      }
+
+      // Try to sign in via API
+      const response = await fetch('/api/auth/signin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        if (result.message.includes('Email not confirmed')) {
           setMessage('Please check your email and click the confirmation link before logging in. If you need a new confirmation email, try registering again.')
-        } else if (error.message.includes('Invalid login credentials')) {
+        } else if (result.message.includes('Invalid login credentials')) {
           // Check if email exists in our system to determine if it's email not found vs bad password
           try {
             // Check if user exists in Supabase auth using our API
-            const response = await fetch('/api/check-user-exists', {
+            const userCheckResponse = await fetch('/api/check-user-exists', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -131,8 +132,8 @@ export default function HomePage() {
               body: JSON.stringify({ email }),
             })
 
-            if (response.ok) {
-              const { exists } = await response.json()
+            if (userCheckResponse.ok) {
+              const { exists } = await userCheckResponse.json()
               
               if (exists) {
                 // User exists, so it's a bad password
@@ -143,45 +144,44 @@ export default function HomePage() {
             }
 
             // If user doesn't exist in auth, check if there's a pending invitation
-            const { data: inviteData } = await supabase
-              .from('invites')
-              .select('*')
-              .eq('invited_email', email)
-              .order('created_at', { ascending: false })
-              .limit(1)
-              .single()
-
-            if (inviteData) {
-              setAccountExists(false) // No account exists yet, just invitation
-              if (inviteData.status === 'pending') {
-                // User hasn't clicked the invite link yet
-                setMessage('You have a pending invitation. Please check your email and click the invitation link to activate your account.')
-              } else if (inviteData.status === 'email_confirmed' && !inviteData.admin_approved_at) {
-                // User clicked invite but admin hasn't approved yet
-                setMessage('Your account is waiting for admin approval. Please contact your administrator to approve your account.')
-              } else if (inviteData.status === 'completed') {
-                // Invitation completed but no account - this shouldn't happen normally
-                setMessage('No account exists for this email address. Please contact your manager or the assetTRAC Admin to request an invitation.')
+            if (inviteResponse.ok) {
+              const inviteData = await inviteResponse.json()
+              if (inviteData.invitation) {
+                setAccountExists(false) // No account exists yet, just invitation
+                if (inviteData.invitation.status === 'pending') {
+                  // User hasn't clicked the invite link yet
+                  setMessage('You have a pending invitation. Please check your email and click the invitation link to activate your account.')
+                } else if (inviteData.invitation.status === 'email_confirmed' && !inviteData.invitation.admin_approved_at) {
+                  // User clicked invite but admin hasn't approved yet
+                  setMessage('Your account is waiting for admin approval. Please contact your administrator to approve your account.')
+                } else if (inviteData.invitation.status === 'completed') {
+                  // Invitation completed but no account - this shouldn't happen normally
+                  setMessage('No account exists for this email address. Please contact your manager or the assetTRAC Admin to request an invitation.')
+                } else {
+                  // Other invitation status
+                  setMessage('No account exists for this email address. Please contact your manager or the assetTRAC Admin to request an invitation.')
+                }
               } else {
-                // Other invitation status
+                // No invitation found
+                setAccountExists(false)
                 setMessage('No account exists for this email address. Please contact your manager or the assetTRAC Admin to request an invitation.')
               }
             } else {
-              // No invitation found
-              setAccountExists(false)
-              setMessage('No account exists for this email address. Please contact your manager or the assetTRAC Admin to request an invitation.')
+              // Fallback to generic message if we can't check
+              setAccountExists(true) // Assume account exists if we can't check
+              setMessage('Invalid email or password. Please check your credentials or use the "Reset Password" button below if you forgot your password.')
             }
           } catch (profileError) {
             // Fallback to generic message if we can't check
             setAccountExists(true) // Assume account exists if we can't check
             setMessage('Invalid email or password. Please check your credentials or use the "Reset Password" button below if you forgot your password.')
           }
-        } else if (error.message.includes('User not found') || error.message.includes('Invalid email')) {
+        } else if (result.message.includes('User not found') || result.message.includes('Invalid email')) {
           setAccountExists(false)
           setMessage('No account exists for this email address. Please contact your manager or the assetTRAC Admin to request an invitation.')
         } else {
           setAccountExists(false)
-          setMessage(`Login error: ${error.message}`)
+          setMessage(`Login error: ${result.message}`)
         }
       } else {
         // Successful login - redirect to dashboard
@@ -264,12 +264,18 @@ export default function HomePage() {
     setMessage('')
 
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth/reset-password`
+      const response = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
       })
 
-      if (error) {
-        setMessage(`Password reset error: ${error.message}`)
+      const result = await response.json()
+
+      if (!response.ok) {
+        setMessage(`Password reset error: ${result.message}`)
       } else {
         setMessage('If an account exists with that email, a password reset link has been sent. If you don\'t have an account, please contact your manager to request an invitation.')
         setEmail(''); setPassword('');
