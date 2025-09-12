@@ -1,34 +1,53 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co'
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key'
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+// Lazy-loaded Supabase clients
+let supabase: any = null
+let supabaseAdmin: any = null
 
-const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: true,
-    flowType: 'pkce'
+const getSupabaseClient = () => {
+  if (!supabase) {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co'
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key'
+    
+    supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: true,
+        flowType: 'pkce'
+      }
+    })
   }
-})
+  return supabase
+}
 
-// Create admin client with service role key (bypasses RLS)
-const supabaseAdmin = supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey, {
-  auth: {
-    autoRefreshToken: false,
-    persistSession: false
+const getSupabaseAdmin = () => {
+  if (!supabaseAdmin) {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co'
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    
+    if (supabaseServiceKey) {
+      supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
+      })
+    }
   }
-}) : null
+  return supabaseAdmin
+}
 
-export { supabase, supabaseAdmin }
+// Export functions instead of direct clients
+export { getSupabaseClient as supabase, getSupabaseAdmin as supabaseAdmin }
 
 // Function to handle auth errors and clear invalid tokens
 export const handleAuthError = async (error: { message?: string }) => {
   if (error.message?.includes('Invalid Refresh Token') || error.message?.includes('Refresh Token Not Found')) {
     try {
       // Clear invalid session
-      await supabase.auth.signOut()
+      const client = getSupabaseClient()
+      await client.auth.signOut()
     } catch (signOutError) {
       // Silently handle sign out errors
     }
@@ -78,7 +97,8 @@ export type AuthResult = {
 // Utility function to check and refresh session
 export const checkAndRefreshSession = async () => {
   try {
-    const { data: { session }, error } = await supabase.auth.getSession()
+    const client = getSupabaseClient()
+    const { data: { session }, error } = await client.auth.getSession()
     
     if (error) {
       await handleAuthError(error)
@@ -91,7 +111,7 @@ export const checkAndRefreshSession = async () => {
     
     // Check if session is expired
     if (session.expires_at && new Date(session.expires_at * 1000) < new Date()) {
-      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession()
+      const { data: refreshData, error: refreshError } = await client.auth.refreshSession()
       
       if (refreshError) {
         await handleAuthError(refreshError)
