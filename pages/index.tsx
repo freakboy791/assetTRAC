@@ -238,26 +238,9 @@ export default function HomePage() {
     setMessage('')
 
     try {
-      const response = await fetch('/api/send-admin-approval-request', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          invitedEmail: currentInvite.invited_email,
-          companyName: currentInvite.company_name,
-          invitationId: currentInvite.id
-        })
-      })
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        setMessage(`Error sending approval request: ${result.message}`)
-        return
-      }
-
-      setMessage('Admin approval request sent successfully! The admin has been notified and will review your account.')
+      // TODO: Re-implement admin notification API
+      // For now, just show a success message
+      setMessage('Admin notification feature temporarily disabled. Please contact your administrator directly.')
     } catch (error) {
       setMessage(`Error contacting admin: ${error}`)
     } finally {
