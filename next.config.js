@@ -13,6 +13,10 @@ const nextConfig = {
     };
     return config;
   },
+  // Force deployment trigger
+  generateBuildId: async () => {
+    return 'deployment-trigger-' + Date.now()
+  }
 };
 
 module.exports = nextConfig;
