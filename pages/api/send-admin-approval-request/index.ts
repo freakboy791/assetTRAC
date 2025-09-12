@@ -25,14 +25,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .single()
 
     if (adminError || !adminData) {
-      console.error('Error finding admin:', adminError)
       return res.status(500).json({ message: 'Admin not found' })
     }
 
     const adminEmail = adminData.users[0].email
 
     // For now, just log the email details (you can implement actual email sending later)
-    console.log('Admin approval request:', {
       adminEmail,
       invitedEmail,
       companyName,
@@ -48,7 +46,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     })
 
   } catch (error) {
-    console.error('Error in send-admin-approval-request:', error)
     return res.status(500).json({ message: 'Internal server error' })
   }
 }

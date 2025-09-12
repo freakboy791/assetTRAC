@@ -91,7 +91,6 @@ assetTRAC System
     })
 
     if (error) {
-      console.error('Error sending email:', error)
       return new Response(
         JSON.stringify({ error: 'Failed to send email' }),
         { 
@@ -113,7 +112,6 @@ assetTRAC System
     )
 
   } catch (error) {
-    console.error('Error in send-admin-approval-request:', error)
     return new Response(
       JSON.stringify({ error: 'Internal server error' }),
       { 

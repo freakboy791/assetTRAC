@@ -20,9 +20,6 @@ export default function AuthPage() {
   useEffect(() => {
     // Check if user is returning from email confirmation
     if (typeof window !== 'undefined') {
-      console.log('Auth page useEffect running')
-      console.log('Current URL:', window.location.href)
-      console.log('Current search params:', window.location.search)
       
       const hash = window.location.hash
       if (hash.includes('access_token') || hash.includes('refresh_token')) {
@@ -34,11 +31,8 @@ export default function AuthPage() {
       // Check for email parameter from invitation link
       const urlParams = new URLSearchParams(window.location.search)
       const emailParam = urlParams.get('email')
-      console.log('URL search params:', window.location.search)
-      console.log('Email parameter:', emailParam)
       
       if (emailParam) {
-        console.log('Setting email to:', emailParam)
         setEmail(emailParam)
         setIsFromInvitation(true)
         setMessage('Email confirmed successfully!<br>Set a password to create your account.')
@@ -49,25 +43,19 @@ export default function AuthPage() {
       } else {
         // Check localStorage as fallback
         const storedEmail = localStorage.getItem('invitedEmail')
-        console.log('No email parameter found, checking localStorage:', storedEmail)
         if (storedEmail) {
-          console.log('Setting email from localStorage:', storedEmail)
           setEmail(storedEmail)
           setIsFromInvitation(true)
           setMessage('Email confirmed successfully!<br>Set a password to create your account.')
           // Clear localStorage
           localStorage.removeItem('invitedEmail')
         } else {
-          console.log('No email found in URL or localStorage')
         }
       }
     }
   }, [])
 
   const handleLogIn = async () => {
-    console.log('=== handleLogIn called ===')
-    console.log('Email:', email)
-    console.log('Password provided:', !!password)
     
     if (!email || !password) {
       setMessage('Please enter both email and password')
@@ -80,7 +68,6 @@ export default function AuthPage() {
     setErrorType('none')
 
     try {
-      console.log('Starting login process for email:', email)
       
       // First, check if there's a pending invitation for this email
       const { data: inviteData, error: inviteError } = await supabase
@@ -91,7 +78,6 @@ export default function AuthPage() {
         .limit(1)
         .single()
 
-      console.log('Invitation check result:', { inviteData, inviteError, email })
 
       if (inviteData) {
         setCurrentInvite(inviteData)
@@ -124,7 +110,6 @@ export default function AuthPage() {
         }
       } else if (inviteError && inviteError.code !== 'PGRST116') {
         // PGRST116 is "not found" which is expected when no invitation exists
-        console.error('Error checking invitation:', inviteError)
         setErrorType('generic')
         setMessage('Error checking invitation status. Please try again.')
         setLoading(false)
@@ -244,12 +229,10 @@ export default function AuthPage() {
           window.location.href = '/'
         }
       } catch (redirectError) {
-        console.error('Error checking user status:', redirectError)
         // Fallback to home page
         window.location.href = '/'
       }
     } catch (error) {
-      console.error('Unexpected error in login process:', error)
       setErrorType('generic')
       setMessage(`Unexpected error: ${error}`)
     } finally {
@@ -304,7 +287,6 @@ export default function AuthPage() {
               })
               
               if (signInError) {
-                console.error('Auto-login failed:', signInError)
                 setMessage('Account updated successfully! Please log in to continue.')
                 setIsFromInvitation(false)
                 return
@@ -315,7 +297,6 @@ export default function AuthPage() {
                 window.location.href = '/company/create'
               }, 2000)
             } catch (loginError) {
-              console.error('Login error:', loginError)
               setMessage('Account updated successfully! Please log in to continue.')
               setIsFromInvitation(false)
             }
@@ -580,7 +561,7 @@ export default function AuthPage() {
 
     try {
       // Use a hardcoded admin email for now
-      const adminEmail = 'admin@example.com' // TODO: Make this configurable
+      const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'admin@yourcompany.com'
       const subject = `Account Approval Request - ${currentInvite.invited_email}`
       const body = `Hello,\n\nI have activated my invitation for ${currentInvite.company_name} but my account is still pending admin approval.\n\nPlease approve my account so I can access the system.\n\nThank you,\n${currentInvite.invited_email}`
       
@@ -682,7 +663,6 @@ export default function AuthPage() {
             <button
               type="button"
               onClick={() => {
-                console.log('Button clicked, isFromInvitation:', isFromInvitation)
                 if (isFromInvitation) {
                   handleSignUp()
                 } else {

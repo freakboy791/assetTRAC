@@ -103,7 +103,6 @@ export default function CreateCompanyPage() {
           window.location.href = '/dashboard'
         }
       } catch (error) {
-        console.error('Error checking user:', error)
         window.location.href = '/'
       } finally {
         setLoading(false)
@@ -195,7 +194,6 @@ export default function CreateCompanyPage() {
       }, 2000)
 
     } catch (error) {
-      console.error('Error creating company:', error)
       setMessage(`Error creating company: ${error.message}`)
     } finally {
       setSubmitting(false)
@@ -207,7 +205,6 @@ export default function CreateCompanyPage() {
       await supabase.auth.signOut()
       window.location.href = '/'
     } catch (error) {
-      console.error('Error signing out:', error)
     }
   }
 

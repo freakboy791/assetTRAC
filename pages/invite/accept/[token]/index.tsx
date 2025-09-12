@@ -38,8 +38,6 @@ export default function InviteAcceptPage() {
         // Set invitation data and email first
         setInvitation(data)
         setEmail(data.invited_email)
-        console.log('Invitation data loaded:', data)
-        console.log('Email set to:', data.invited_email)
 
         // Check if invitation is expired
         if (data.expires_at && new Date(data.expires_at) < new Date()) {
@@ -64,7 +62,6 @@ export default function InviteAcceptPage() {
 
         // If invitation is pending, update it to email_confirmed since user clicked the link
         if (data.status === 'pending') {
-          console.log('Invitation is pending, updating to email_confirmed')
           
           // Update invitation status to email_confirmed
           const { error: updateError } = await supabase
@@ -76,17 +73,14 @@ export default function InviteAcceptPage() {
             .eq('token', token)
           
           if (updateError) {
-            console.error('Error updating invitation status:', updateError)
             setError('Error confirming email. Please try again.')
             setLoading(false)
             return
           }
           
-          console.log('Invitation status updated to email_confirmed')
         }
 
         // If invitation is valid, redirect immediately to login with email
-        console.log('Valid invitation found, redirecting to login with email:', data.invited_email)
         
         // Store email in localStorage as backup
         localStorage.setItem('invitedEmail', data.invited_email)
@@ -94,17 +88,14 @@ export default function InviteAcceptPage() {
         // Check if we're on the correct port (3000) and redirect if needed
         const currentPort = window.location.port
         const currentHost = window.location.hostname
-        console.log('Current port:', currentPort, 'Current host:', currentHost)
         
         if (currentPort !== '3000' && currentHost === 'localhost') {
-          console.log('Redirecting to correct port 3000')
           const redirectUrl = `http://localhost:3000/auth?email=${encodeURIComponent(data.invited_email)}`
           window.location.href = redirectUrl
           return
         }
         
         const redirectUrl = `/auth?email=${encodeURIComponent(data.invited_email)}`
-        console.log('Redirecting to:', redirectUrl)
         
         // Add a small delay to ensure the page has loaded
         setTimeout(() => {
@@ -112,7 +103,6 @@ export default function InviteAcceptPage() {
         }, 100)
       } catch (err) {
         setError('Error validating invitation')
-        console.error('Error:', err)
       } finally {
         setLoading(false)
       }

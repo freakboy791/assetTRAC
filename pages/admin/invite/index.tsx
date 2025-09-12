@@ -38,7 +38,6 @@ export default function AdminInvitePage() {
 
         setIsAdmin(true)
       } catch (error) {
-        console.error('Error checking user:', error)
         window.location.href = '/'
       }
     }
@@ -91,8 +90,6 @@ export default function AdminInvitePage() {
 
       // Send invitation email using Edge Function
       const invitationLink = `${window.location.origin}/invite/accept/${token}`
-      console.log('Generated invitation link:', invitationLink)
-      console.log('Window location origin:', window.location.origin)
       
       const emailResponse = await fetch('/api/send-invite-email', {
         method: 'POST',
@@ -137,7 +134,6 @@ export default function AdminInvitePage() {
       await supabase.auth.signOut()
       window.location.href = '/'
     } catch (error) {
-      console.error('Error signing out:', error)
     }
   }
 

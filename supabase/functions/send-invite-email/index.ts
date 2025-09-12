@@ -84,7 +84,6 @@ Deno.serve(async (req) => {
     const { data: existingUser, error: userCheckError } = await supabase.auth.admin.listUsers()
     
     if (userCheckError) {
-      console.error('Error checking existing users:', userCheckError)
       return new Response(
         JSON.stringify({ error: `Failed to check existing users: ${userCheckError.message}` }),
         { 
@@ -102,10 +101,8 @@ Deno.serve(async (req) => {
     
     if (userExists) {
       // User already exists - send invitation email with the invitation link
-      console.log(`User ${email} already exists, sending invitation email with link: ${invitationLink}`)
       
               // For existing users, return the invitation link since we can't use inviteUserByEmail for existing users
-        console.log(`User ${email} already exists, returning invitation link for manual sending`)
         return new Response(
           JSON.stringify({ 
             success: true, 
@@ -126,13 +123,11 @@ Deno.serve(async (req) => {
 
         // For new users, send custom invitation email with our invitation link
     try {
-      console.log(`Sending custom invitation email to new user ${email}`)
       
       // Since we can't send emails directly from Edge Functions without a service,
       // we'll return the invitation link for manual sending
       // In production, you'd integrate with SendGrid, Resend, or similar
       
-      console.log(`Custom invitation email prepared for new user ${email}`)
       return new Response(
         JSON.stringify({ 
           success: true, 
@@ -150,7 +145,6 @@ Deno.serve(async (req) => {
         }
       )
     } catch (emailError) {
-      console.error('Error preparing custom invitation email:', emailError)
       return new Response(
         JSON.stringify({ 
           success: true, 
@@ -169,7 +163,6 @@ Deno.serve(async (req) => {
     }
 
   } catch (error) {
-    console.error('Unexpected error:', error)
     return new Response(
       JSON.stringify({ error: 'Internal server error' }),
       { 
@@ -191,6 +184,6 @@ Deno.serve(async (req) => {
   curl -i --location --request POST 'http://127.0.0.1:54321/functions/v1/send-invite-email' \
     --header 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0' \
     --header 'Content-Type: application/json' \
-    --data '{"email":"test@example.com","companyName":"Test Company","invitationLink":"http://localhost:3001/invite/accept/token123","message":"Welcome to our platform!"}'
+    --data '{"email":"user@example.com","companyName":"Your Company","invitationLink":"https://yourdomain.com/invite/accept/token123","message":"Welcome to our platform!"}'
 
 */

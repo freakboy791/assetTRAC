@@ -45,7 +45,6 @@ export default function AdminDashboardPage() {
         }
         loadInvitations()
       } catch (error) {
-        console.error('Error checking user:', error)
         window.location.href = '/'
       }
     }
@@ -61,13 +60,11 @@ export default function AdminDashboardPage() {
         .order('created_at', { ascending: false })
 
       if (error) {
-        console.error('Error loading invitations:', error)
         return
       }
 
       setInvitations(data || [])
     } catch (error) {
-      console.error('Error loading invitations:', error)
     } finally {
       setLoading(false)
     }
@@ -85,14 +82,12 @@ export default function AdminDashboardPage() {
         .eq('id', invitationId)
 
       if (error) {
-        console.error('Error approving invitation:', error)
         return
       }
 
       // Reload invitations
       loadInvitations()
     } catch (error) {
-      console.error('Error approving invitation:', error)
     }
   }
 
@@ -106,14 +101,12 @@ export default function AdminDashboardPage() {
         .eq('id', invitationId)
 
       if (error) {
-        console.error('Error rejecting invitation:', error)
         return
       }
 
       // Reload invitations
       loadInvitations()
     } catch (error) {
-      console.error('Error rejecting invitation:', error)
     }
   }
 
@@ -150,7 +143,6 @@ export default function AdminDashboardPage() {
       await supabase.auth.signOut()
       window.location.href = '/'
     } catch (error) {
-      console.error('Error signing out:', error)
     }
   }
 

@@ -21,13 +21,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    console.log('Updating invited user with email:', email)
     
     // First, find the invited user
     const { data: existingUsers, error: listError } = await supabase.auth.admin.listUsers()
     
     if (listError) {
-      console.error('Error listing users:', listError)
       return res.status(500).json({ error: `Failed to check existing users: ${listError.message}` })
     }
     
@@ -37,7 +35,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(404).json({ error: 'No invited user found with this email' })
     }
     
-    console.log('Found invited user:', invitedUser.id)
     
     // Update the user's password and confirm their email
     const { data: userData, error: updateError } = await supabase.auth.admin.updateUserById(invitedUser.id, {
@@ -45,10 +42,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       email_confirm: true
     })
     
-    console.log('User update result:', { userData, updateError })
 
     if (updateError) {
-      console.error('Error updating user:', updateError)
       return res.status(500).json({ error: `Failed to update user account: ${updateError.message}` })
     }
     
@@ -66,7 +61,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }])
 
     if (roleError) {
-      console.error('Error assigning role:', roleError)
       // Don't fail the request, just log the error
     }
 
@@ -97,7 +91,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       message: 'Account created successfully! Redirecting to company setup...'
     })
   } catch (error) {
-    console.error('Error creating invited user:', error)
     return res.status(500).json({ error: 'Internal server error' })
   }
 }

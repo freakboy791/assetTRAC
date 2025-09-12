@@ -57,7 +57,6 @@ export default function DashboardPage() {
           }
         }
       } catch (error) {
-        console.error('Error checking user:', error)
         window.location.href = '/'
       } finally {
         setLoading(false)
@@ -72,7 +71,6 @@ export default function DashboardPage() {
       await supabase.auth.signOut()
       window.location.href = '/'
     } catch (error) {
-      console.error('Error signing out:', error)
     }
   }
 

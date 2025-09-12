@@ -26,7 +26,6 @@ export default function HomePage() {
           window.location.href = '/dashboard'
         }
       } catch (error) {
-        console.log('Auth check error:', error)
         // Force clear any invalid auth state
         await supabase.auth.signOut()
       }
@@ -45,11 +44,8 @@ export default function HomePage() {
       // Check for email parameter from invitation link
       const urlParams = new URLSearchParams(window.location.search)
       const emailParam = urlParams.get('email')
-      console.log('Index page - URL search params:', window.location.search)
-      console.log('Index page - Email parameter:', emailParam)
       
       if (emailParam) {
-        console.log('Index page - Setting email to:', emailParam)
         setEmail(emailParam)
         setMessage('Email confirmed successfully!<br>Set a password and log in.')
         // Clear the email parameter from URL
@@ -59,15 +55,12 @@ export default function HomePage() {
       } else {
         // Check localStorage as fallback
         const storedEmail = localStorage.getItem('invitedEmail')
-        console.log('Index page - No email parameter found, checking localStorage:', storedEmail)
         if (storedEmail) {
-          console.log('Index page - Setting email from localStorage:', storedEmail)
           setEmail(storedEmail)
           setMessage('Email confirmed successfully!<br>Set a password and log in.')
           // Clear localStorage
           localStorage.removeItem('invitedEmail')
         } else {
-          console.log('Index page - No email found in URL or localStorage')
         }
       }
     }

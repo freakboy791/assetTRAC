@@ -16,13 +16,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-    console.log('Environment check:', {
       supabaseUrl: supabaseUrl ? 'Set' : 'Missing',
       supabaseServiceKey: supabaseServiceKey ? 'Set' : 'Missing'
     })
 
     if (!supabaseUrl || !supabaseServiceKey) {
-      console.error('Missing Supabase configuration:', {
         supabaseUrl: !!supabaseUrl,
         supabaseServiceKey: !!supabaseServiceKey
       })
@@ -38,11 +36,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     })
 
     // Skip user existence check for now - let Supabase handle it during invitation
-    console.log('Proceeding with invitation - Supabase will handle existing users')
 
     // Send invitation email using Supabase admin functions
-    console.log('Attempting to send invitation email...')
-    console.log('Invitation link being sent to Supabase:', invitationLink)
     
     // Use custom redirect URL to ensure it goes to localhost:3000
     const { data: inviteData, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(email, {
@@ -56,8 +51,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     })
 
     if (inviteError) {
-      console.error('Error sending invitation email:', inviteError)
-      console.error('Invite error details:', {
         message: inviteError.message,
         status: inviteError.status,
         code: inviteError.code
@@ -78,7 +71,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       })
     }
 
-    console.log('Invitation sent successfully:', inviteData)
 
     res.status(200).json({
       success: true,
@@ -87,7 +79,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     })
 
   } catch (error: any) {
-    console.error('Error in send-invite-email API route:', error)
     res.status(500).json({ message: `Failed to process invitation email: ${error.message}` })
   }
 }

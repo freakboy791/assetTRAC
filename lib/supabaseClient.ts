@@ -19,8 +19,6 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 
 // Add auth state change listener
 supabase.auth.onAuthStateChange((event, session) => {
-  console.log('Auth state changed:', event, session?.user?.email)
-  
   if (event === 'SIGNED_OUT') {
     // Clear any remaining auth data
     if (typeof window !== 'undefined') {
@@ -30,9 +28,8 @@ supabase.auth.onAuthStateChange((event, session) => {
             localStorage.removeItem(key)
           }
         })
-        console.log('Auth data cleared on sign out')
       } catch (error) {
-        console.error('Error clearing auth data:', error)
+        // Silently handle storage errors
       }
     }
   }
@@ -50,17 +47,12 @@ export { supabase, supabaseAdmin }
 
 // Function to handle auth errors and clear invalid tokens
 export const handleAuthError = async (error: { message?: string }) => {
-  console.log('Handling auth error:', error.message)
-  
   if (error.message?.includes('Invalid Refresh Token') || error.message?.includes('Refresh Token Not Found')) {
-    console.log('Invalid refresh token detected, clearing session...')
-    
     try {
       // Clear invalid session
       await supabase.auth.signOut()
-      console.log('Session cleared successfully')
     } catch (signOutError) {
-      console.error('Error during sign out:', signOutError)
+      // Silently handle sign out errors
     }
     
     // Clear any remaining auth data from localStorage
@@ -80,10 +72,8 @@ export const handleAuthError = async (error: { message?: string }) => {
             localStorage.removeItem(key)
           }
         })
-        
-        console.log('Local storage cleared')
       } catch (storageError) {
-        console.error('Error clearing storage:', storageError)
+        // Silently handle storage errors
       }
     }
     
@@ -91,7 +81,6 @@ export const handleAuthError = async (error: { message?: string }) => {
     try {
       window.location.href = '/'
     } catch (redirectError) {
-      console.error('Error redirecting:', redirectError)
       // Fallback: try to reload the page
       window.location.reload()
     }
@@ -114,23 +103,19 @@ export const checkAndRefreshSession = async () => {
     const { data: { session }, error } = await supabase.auth.getSession()
     
     if (error) {
-      console.error('Error getting session:', error)
       await handleAuthError(error)
       return null
     }
     
     if (!session) {
-      console.log('No active session')
       return null
     }
     
     // Check if session is expired
     if (session.expires_at && new Date(session.expires_at * 1000) < new Date()) {
-      console.log('Session expired, refreshing...')
       const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession()
       
       if (refreshError) {
-        console.error('Error refreshing session:', refreshError)
         await handleAuthError(refreshError)
         return null
       }
@@ -140,7 +125,6 @@ export const checkAndRefreshSession = async () => {
     
     return session
   } catch (error) {
-    console.error('Unexpected error in checkAndRefreshSession:', error)
     return null
   }
 }
@@ -161,47 +145,8 @@ export const clearAllAuthData = () => {
           sessionStorage.removeItem(key)
         }
       })
-      
-      console.log('All auth data cleared')
     } catch (error) {
-      console.error('Error clearing auth data:', error)
+      // Silently handle storage errors
     }
   }
-}
-
-// Development utility: Add to window for easy access in console
-if (typeof window !== 'undefined') {
-  // Add development utilities to window object
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ;(window as any).clearAuthData = clearAllAuthData
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ;(window as any).supabaseClient = supabase
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ;(window as any).testSupabaseConnection = async () => {
-    try {
-      console.log('Testing Supabase connection...')
-      console.log('Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL)
-      console.log('Has anon key:', !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
-      
-      // Test basic connectivity
-      const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/`, {
-        method: 'GET',
-        headers: {
-          'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
-          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''}`
-        }
-      })
-      
-      console.log('Connection test response:', response.status, response.statusText)
-      return response.ok
-    } catch (error) {
-      console.error('Connection test failed:', error)
-      return false
-    }
-  }
-  
-  console.log('Development utilities available:')
-  console.log('- window.clearAuthData() - Clear all auth data')
-  console.log('- window.supabaseClient - Access Supabase client')
-  console.log('- window.testSupabaseConnection() - Test Supabase connectivity')
 }
