@@ -2,6 +2,7 @@
     "name": "assettrac",
     "version": "0.1.0",
     "private": true,
+    "description": "Asset tracking application with admin approval workflow",
     "scripts": {
         "dev": "next dev -p 3000",
         "dev:force": "npx kill-port 3000 && next dev -p 3000",
