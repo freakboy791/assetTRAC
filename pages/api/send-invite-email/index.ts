@@ -16,15 +16,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-      supabaseUrl: supabaseUrl ? 'Set' : 'Missing',
-      supabaseServiceKey: supabaseServiceKey ? 'Set' : 'Missing'
-    })
+    // Environment variables are available for use
 
     if (!supabaseUrl || !supabaseServiceKey) {
+      return res.status(500).json({ 
+        message: 'Missing Supabase configuration',
         supabaseUrl: !!supabaseUrl,
         supabaseServiceKey: !!supabaseServiceKey
       })
-      return res.status(500).json({ message: 'Missing Supabase configuration' })
     }
 
     // Create admin client
@@ -51,6 +50,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     })
 
     if (inviteError) {
+      console.error('Invite error details:', {
         message: inviteError.message,
         status: inviteError.status,
         code: inviteError.code

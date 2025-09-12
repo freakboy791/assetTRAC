@@ -1,2 +1,2 @@
-supabase/functions/**
-supabase/config.toml
+temp_supabase/**
+supabase/**
