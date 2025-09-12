@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { supabase } from '../../../lib/supabaseClient'
 import { Invitation } from '../../../types'
 
 // Make this page dynamic to avoid build-time issues
@@ -19,23 +18,23 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     const checkUser = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser()
+        // Check if user is authenticated by calling our API
+        const response = await fetch('/api/check-user-exists')
+        const data = await response.json()
         
-        if (!user) {
+        if (!data.user) {
           window.location.href = '/'
           return
         }
 
-        setUser(user)
+        setUser(data.user)
 
         // Check user roles
-        const { data: userRoles } = await supabase
-          .from('user_roles')
-          .select('role')
-          .eq('user_id', user.id)
-
-        if (userRoles) {
-          const roles = userRoles.map(r => r.role)
+        const rolesResponse = await fetch('/api/check-user-exists')
+        const rolesData = await rolesResponse.json()
+        
+        if (rolesData.userRoles) {
+          const roles = rolesData.userRoles
           setUserRoles(roles)
           
           if (roles.includes('admin')) {
@@ -61,16 +60,15 @@ export default function AdminDashboardPage() {
 
   const loadInvitations = async () => {
     try {
-      const { data, error } = await supabase
-        .from('invites')
-        .select('*')
-        .order('created_at', { ascending: false })
+      // We'll need to create an API route for this
+      const response = await fetch('/api/admin/invitations')
+      const data = await response.json()
 
-      if (error) {
+      if (data.error) {
         return
       }
 
-      setInvitations(data || [])
+      setInvitations(data.invitations || [])
     } catch (error) {
     } finally {
       setLoading(false)
@@ -79,16 +77,15 @@ export default function AdminDashboardPage() {
 
   const handleApprove = async (invitationId: number) => {
     try {
-      const { error } = await supabase
-        .from('invites')
-        .update({
-          status: 'admin_approved',
-          admin_approved_at: new Date().toISOString(),
-          admin_approved_by: user.id
-        })
-        .eq('id', invitationId)
+      const response = await fetch('/api/admin/approve-invitation', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ invitationId }),
+      })
 
-      if (error) {
+      if (!response.ok) {
         return
       }
 
@@ -100,14 +97,15 @@ export default function AdminDashboardPage() {
 
   const handleReject = async (invitationId: number) => {
     try {
-      const { error } = await supabase
-        .from('invites')
-        .update({
-          status: 'expired'
-        })
-        .eq('id', invitationId)
+      const response = await fetch('/api/admin/reject-invitation', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ invitationId }),
+      })
 
-      if (error) {
+      if (!response.ok) {
         return
       }
 
@@ -147,7 +145,8 @@ export default function AdminDashboardPage() {
 
   const handleSignOut = async () => {
     try {
-      await supabase.auth.signOut()
+      // We'll need to create an API route for sign out
+      await fetch('/api/auth/signout', { method: 'POST' })
       window.location.href = '/'
     } catch (error) {
     }
