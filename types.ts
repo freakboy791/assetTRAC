@@ -52,6 +52,12 @@ export interface Invitation {
   used: boolean
   created_by: string
   created_at: string
+  role: string
+  status: 'pending' | 'email_confirmed' | 'admin_approved' | 'completed' | 'expired'
+  email_confirmed_at: string | null
+  admin_approved_at: string | null
+  admin_approved_by: string | null
+  completed_at: string | null
 }
 
 export interface AdminNotification {

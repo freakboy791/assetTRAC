@@ -1,0 +1,103 @@
+import { NextApiRequest, NextApiResponse } from 'next'
+import { createClient } from '@supabase/supabase-js'
+
+// Bypass SSL for development
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' })
+  }
+
+  const { email, password } = req.body
+
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password are required' })
+  }
+
+  try {
+    console.log('Updating invited user with email:', email)
+    
+    // First, find the invited user
+    const { data: existingUsers, error: listError } = await supabase.auth.admin.listUsers()
+    
+    if (listError) {
+      console.error('Error listing users:', listError)
+      return res.status(500).json({ error: `Failed to check existing users: ${listError.message}` })
+    }
+    
+    const invitedUser = existingUsers.users.find(user => user.email === email)
+    
+    if (!invitedUser) {
+      return res.status(404).json({ error: 'No invited user found with this email' })
+    }
+    
+    console.log('Found invited user:', invitedUser.id)
+    
+    // Update the user's password and confirm their email
+    const { data: userData, error: updateError } = await supabase.auth.admin.updateUserById(invitedUser.id, {
+      password: password,
+      email_confirm: true
+    })
+    
+    console.log('User update result:', { userData, updateError })
+
+    if (updateError) {
+      console.error('Error updating user:', updateError)
+      return res.status(500).json({ error: `Failed to update user account: ${updateError.message}` })
+    }
+    
+    if (!userData.user) {
+      return res.status(500).json({ error: 'No user data returned from update' })
+    }
+
+
+    // Assign owner role
+    const { error: roleError } = await supabase
+      .from('user_roles')
+      .insert([{
+        user_id: invitedUser.id,
+        role: 'owner'
+      }])
+
+    if (roleError) {
+      console.error('Error assigning role:', roleError)
+      // Don't fail the request, just log the error
+    }
+
+    // Update invitation status to email_confirmed (not completed until admin approval)
+    const { data: inviteData } = await supabase
+      .from('invites')
+      .select('*')
+      .eq('invited_email', email)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single()
+
+    if (inviteData) {
+      await supabase
+        .from('invites')
+        .update({
+          status: 'email_confirmed',
+          email_confirmed_at: new Date().toISOString(),
+          accepted: true,
+          used: false // Not used until admin approval
+        })
+        .eq('id', inviteData.id)
+    }
+
+    return res.status(200).json({ 
+      success: true, 
+      user: userData.user,
+      message: 'Account created successfully! Redirecting to company setup...'
+    })
+  } catch (error) {
+    console.error('Error creating invited user:', error)
+    return res.status(500).json({ error: 'Internal server error' })
+  }
+}
