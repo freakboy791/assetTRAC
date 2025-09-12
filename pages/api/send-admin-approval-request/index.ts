@@ -30,9 +30,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const adminEmail = adminData.users[0].email
 
-    // For now, just prepare the email details (you can implement actual email sending later)
-    // adminEmail, invitedEmail, companyName, invitationId are available for use
-
     // TODO: Implement actual email sending
     // For now, we'll just return success
 
