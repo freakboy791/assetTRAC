@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { supabase } from '../../../../lib/supabaseClient'
 import { Invitation } from '../../../../types'
 import Link from 'next/link'
 
@@ -8,12 +7,15 @@ export default function InviteAcceptPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [email, setEmail] = useState('')
-  // Removed unused state variables since we're redirecting immediately
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [message, setMessage] = useState('')
 
   useEffect(() => {
-    const validateInvitation = async () => {
+    const fetchInvitation = async () => {
       try {
-        // Extract token from URL
+        // Get token from URL
         const token = window.location.pathname.split('/').pop()
         
         if (!token) {
@@ -22,103 +24,86 @@ export default function InviteAcceptPage() {
           return
         }
 
-        // Check if invitation exists and is valid
-        const { data, error: fetchError } = await supabase
-          .from('invites')
-          .select('*')
-          .eq('token', token)
-          .single()
+        // Fetch invitation details via API
+        const response = await fetch(`/api/invite/validate?token=${token}`)
+        const data = await response.json()
 
-        if (fetchError || !data) {
-          setError('Invitation not found or invalid')
+        if (!response.ok) {
+          setError(data.message || 'Invalid invitation')
           setLoading(false)
           return
         }
 
-        // Set invitation data and email first
-        setInvitation(data)
-        setEmail(data.invited_email)
-
-        // Check if invitation is expired
-        if (data.expires_at && new Date(data.expires_at) < new Date()) {
-          setError('This invitation has expired')
-          setLoading(false)
-          return
-        }
-
-        // Check if invitation is already used
-        if (data.used) {
-          setError('This invitation has already been used')
-          setLoading(false)
-          return
-        }
-
-        // Check if invitation is completed
-        if (data.status === 'completed') {
-          setError('This invitation has already been completed')
-          setLoading(false)
-          return
-        }
-
-        // If invitation is pending, update it to email_confirmed since user clicked the link
-        if (data.status === 'pending') {
-          
-          // Update invitation status to email_confirmed
-          const { error: updateError } = await supabase
-            .from('invites')
-            .update({ 
-              status: 'email_confirmed',
-              email_confirmed_at: new Date().toISOString()
-            })
-            .eq('token', token)
-          
-          if (updateError) {
-            setError('Error confirming email. Please try again.')
-            setLoading(false)
-            return
-          }
-          
-        }
-
-        // If invitation is valid, redirect immediately to login with email
-        
-        // Store email in localStorage as backup
-        localStorage.setItem('invitedEmail', data.invited_email)
-        
-        // Check if we're on the correct port (3000) and redirect if needed
-        const currentPort = window.location.port
-        const currentHost = window.location.hostname
-        
-        if (currentPort !== '3000' && currentHost === 'localhost') {
-          const redirectUrl = `http://localhost:3000/auth?email=${encodeURIComponent(data.invited_email)}`
-          window.location.href = redirectUrl
-          return
-        }
-        
-        const redirectUrl = `/auth?email=${encodeURIComponent(data.invited_email)}`
-        
-        // Add a small delay to ensure the page has loaded
-        setTimeout(() => {
-          window.location.href = redirectUrl
-        }, 100)
-      } catch (err) {
-        setError('Error validating invitation')
-      } finally {
+        setInvitation(data.invitation)
+        setEmail(data.invitation.invited_email)
+        setLoading(false)
+      } catch (error) {
+        setError('Failed to load invitation')
         setLoading(false)
       }
     }
 
-    validateInvitation()
+    fetchInvitation()
   }, [])
 
-  // Removed handleSignup function since we're redirecting immediately
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!password || !confirmPassword) {
+      setMessage('Please fill in all fields')
+      return
+    }
+
+    if (password !== confirmPassword) {
+      setMessage('Passwords do not match')
+      return
+    }
+
+    if (password.length < 6) {
+      setMessage('Password must be at least 6 characters long')
+      return
+    }
+
+    setSubmitting(true)
+    setMessage('')
+
+    try {
+      const token = window.location.pathname.split('/').pop()
+      
+      const response = await fetch('/api/invite/accept', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          token,
+          password
+        })
+      })
+
+      const result = await response.json()
+
+      if (response.ok) {
+        setMessage('Account created successfully! Redirecting to login...')
+        setTimeout(() => {
+          window.location.href = '/'
+        }, 2000)
+      } else {
+        setMessage(`Error: ${result.message}`)
+      }
+    } catch (error) {
+      setMessage(`Error: ${error}`)
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Validating invitation...</p>
+          <p className="mt-4 text-gray-600">Loading invitation...</p>
         </div>
       </div>
     )
@@ -126,11 +111,11 @@ export default function InviteAcceptPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="max-w-md w-full space-y-8">
           <div className="text-center">
             <div className="mx-auto h-16 w-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
-              <svg className="h-8 w-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </div>
@@ -150,6 +135,17 @@ export default function InviteAcceptPage() {
     )
   }
 
+  if (!invitation) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
@@ -161,14 +157,100 @@ export default function InviteAcceptPage() {
           <h1 className="text-3xl font-extrabold text-gray-900 bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
             assetTRAC
           </h1>
-          <p className="mt-2 text-sm text-gray-600">Redirecting to login...</p>
+          <p className="mt-2 text-sm text-gray-600">Complete Your Account Setup</p>
         </div>
 
         <div className="bg-white py-8 px-6 shadow rounded-lg sm:px-10">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600">Validating invitation and redirecting...</p>
+          <div className="mb-6">
+            <h2 className="text-center text-2xl font-bold text-gray-900">
+              Welcome to {invitation.company_name}!
+            </h2>
+            <p className="mt-2 text-center text-sm text-gray-600">
+              You've been invited to join {invitation.company_name} on assetTRAC. 
+              Please set up your password to complete your account.
+            </p>
+            {invitation.message && (
+              <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                <p className="text-sm text-blue-700">
+                  <strong>Message from {invitation.created_by}:</strong><br />
+                  {invitation.message}
+                </p>
+              </div>
+            )}
           </div>
+        
+          <form onSubmit={handleSubmit} className="mt-8 space-y-6">
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="email" className="sr-only">
+                  Email address
+                </label>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm bg-gray-100 cursor-not-allowed"
+                  placeholder="Email address"
+                  value={email}
+                  readOnly
+                />
+              </div>
+              <div>
+                <label htmlFor="password" className="sr-only">
+                  Password
+                </label>
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  autoComplete="new-password"
+                  required
+                  className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                  placeholder="Password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+              </div>
+              <div>
+                <label htmlFor="confirmPassword" className="sr-only">
+                  Confirm Password
+                </label>
+                <input
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  type="password"
+                  autoComplete="new-password"
+                  required
+                  className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                  placeholder="Confirm Password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {submitting ? 'Creating Account...' : 'Create Account'}
+              </button>
+            </div>
+
+            {message && (
+              <div className={`mt-4 p-3 rounded-md text-sm ${
+                message.includes('error') || message.includes('Error')
+                  ? 'bg-red-50 text-red-700 border border-red-200' 
+                  : 'bg-green-50 text-green-700 border border-green-200'
+              }`}>
+                {message}
+              </div>
+            )}
+          </form>
         </div>
       </div>
     </div>
