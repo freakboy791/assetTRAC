@@ -4,35 +4,12 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key'
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-// Only throw error in browser, not during build
-if (typeof window !== 'undefined' && (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)) {
-  throw new Error('Missing Supabase environment variables. Please check your .env.local file.')
-}
-
 const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true,
     flowType: 'pkce'
-  }
-})
-
-// Add auth state change listener
-supabase.auth.onAuthStateChange((event, session) => {
-  if (event === 'SIGNED_OUT') {
-    // Clear any remaining auth data
-    if (typeof window !== 'undefined') {
-      try {
-        Object.keys(localStorage).forEach(key => {
-          if (key.startsWith('supabase.auth.')) {
-            localStorage.removeItem(key)
-          }
-        })
-      } catch (error) {
-        // Silently handle storage errors
-      }
-    }
   }
 })
 
