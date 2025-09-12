@@ -2,6 +2,13 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../../lib/supabaseClient'
 import { Invitation } from '../../../types'
 
+// Make this page dynamic to avoid build-time issues
+export async function getServerSideProps() {
+  return {
+    props: {},
+  }
+}
+
 export default function AdminDashboardPage() {
   const [invitations, setInvitations] = useState<Invitation[]>([])
   const [loading, setLoading] = useState(true)
