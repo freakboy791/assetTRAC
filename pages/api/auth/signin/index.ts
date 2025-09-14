@@ -30,6 +30,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ message: error.message })
     }
 
+    // Set the session in the response headers so the client can use it
+    if (data.session) {
+      res.setHeader('Set-Cookie', [
+        `sb-access-token=${data.session.access_token}; Path=/; HttpOnly; Secure; SameSite=Lax`,
+        `sb-refresh-token=${data.session.refresh_token}; Path=/; HttpOnly; Secure; SameSite=Lax`
+      ])
+    }
+
     return res.status(200).json({ user: data.user, session: data.session })
   } catch (error) {
     return res.status(500).json({ message: 'Internal server error' })

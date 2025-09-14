@@ -114,85 +114,36 @@ export default function HomePage() {
         }
       }
 
-      // Try to sign in via API
-      console.log('Attempting to sign in via API')
-      const response = await fetch('/api/auth/signin', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
+      // Try to sign in directly with Supabase client
+      console.log('Attempting to sign in with Supabase client')
+      
+      // Import Supabase client dynamically
+      const { createClient } = await import('@supabase/supabase-js')
+      const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      )
+      
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
       })
 
-      console.log('Sign in response:', response.status, response.statusText)
-      const result = await response.json()
-      console.log('Sign in result:', result)
+      console.log('Sign in response:', error ? 'Error' : 'Success')
+      console.log('Sign in result:', error ? error.message : 'User logged in')
 
-      if (!response.ok) {
-        if (result.message.includes('Email not confirmed')) {
+      if (error) {
+        if (error.message.includes('Email not confirmed')) {
           setMessage('Please check your email and click the confirmation link before logging in. If you need a new confirmation email, try registering again.')
-        } else if (result.message.includes('Invalid login credentials')) {
-          // Check if email exists in our system to determine if it's email not found vs bad password
-          try {
-            // Check if user exists in Supabase auth using our API
-            const userCheckResponse = await fetch('/api/check-user-exists', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({ email }),
-            })
-
-            if (userCheckResponse.ok) {
-              const { exists } = await userCheckResponse.json()
-              
-              if (exists) {
-                // User exists, so it's a bad password
-                setAccountExists(true)
-                setMessage('The password you entered is incorrect. Please try again or use the "Reset Password" button below if you forgot your password.')
-                return
-              }
-            }
-
-            // If user doesn't exist in auth, check if there's a pending invitation
-            if (inviteResponse.ok) {
-              const inviteData = await inviteResponse.json()
-              if (inviteData.invitation) {
-                setAccountExists(false) // No account exists yet, just invitation
-                if (inviteData.invitation.status === 'pending') {
-                  // User hasn't clicked the invite link yet
-                  setMessage('You have a pending invitation. Please check your email and click the invitation link to activate your account.')
-                } else if (inviteData.invitation.status === 'email_confirmed' && !inviteData.invitation.admin_approved_at) {
-                  // User clicked invite but admin hasn't approved yet
-                  setMessage('Your account is waiting for admin approval. Please contact your administrator to approve your account.')
-                } else if (inviteData.invitation.status === 'completed') {
-                  // Invitation completed but no account - this shouldn't happen normally
-                  setMessage('No account exists for this email address. Please contact your manager or the assetTRAC Admin to request an invitation.')
-                } else {
-                  // Other invitation status
-                  setMessage('No account exists for this email address. Please contact your manager or the assetTRAC Admin to request an invitation.')
-                }
-              } else {
-                // No invitation found
-                setAccountExists(false)
-                setMessage('No account exists for this email address. Please contact your manager or the assetTRAC Admin to request an invitation.')
-              }
-            } else {
-              // Fallback to generic message if we can't check
-              setAccountExists(true) // Assume account exists if we can't check
-              setMessage('Invalid email or password. Please check your credentials or use the "Reset Password" button below if you forgot your password.')
-            }
-          } catch (profileError) {
-            // Fallback to generic message if we can't check
-            setAccountExists(true) // Assume account exists if we can't check
-            setMessage('Invalid email or password. Please check your credentials or use the "Reset Password" button below if you forgot your password.')
-          }
-        } else if (result.message.includes('User not found') || result.message.includes('Invalid email')) {
+        } else if (error.message.includes('Invalid login credentials')) {
+          setAccountExists(true)
+          setMessage('The password you entered is incorrect. Please try again or use the "Reset Password" button below if you forgot your password.')
+        } else if (error.message.includes('User not found') || error.message.includes('Invalid email')) {
           setAccountExists(false)
           setMessage('No account exists for this email address. Please contact your manager or the assetTRAC Admin to request an invitation.')
         } else {
           setAccountExists(false)
-          setMessage(`Login error: ${result.message}`)
+          setMessage(`Login error: ${error.message}`)
         }
       } else {
         // Successful login - redirect to dashboard
