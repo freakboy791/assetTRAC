@@ -137,30 +137,12 @@ export default function AdminInvitePage() {
               <h1 className="text-2xl font-bold text-gray-900">assetTRAC Admin</h1>
             </div>
             <div className="flex items-center space-x-4">
-              <div className="flex flex-col items-end">
-                <span className="text-sm text-gray-700">Welcome, {user?.email}</span>
-                {userRoles.length > 0 && (
-                  <div className="flex items-center space-x-2 mt-1">
-                    <span className="text-xs text-gray-500">Role:</span>
-                    <div className="flex space-x-1">
-                      {userRoles.map((role, index) => (
-                        <span
-                          key={index}
-                          className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                            role === 'admin' 
-                              ? 'bg-purple-100 text-purple-800' 
-                              : role === 'owner'
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-blue-100 text-blue-800'
-                          }`}
-                        >
-                          {role.charAt(0).toUpperCase() + role.slice(1)}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
+              <button
+                onClick={() => window.location.href = '/dashboard'}
+                className="bg-gray-600 text-white px-4 py-2 rounded-md text-sm hover:bg-gray-700 transition-colors"
+              >
+                Back to Dashboard
+              </button>
               <button
                 onClick={handleSignOut}
                 className="bg-red-600 text-white px-4 py-2 rounded-md text-sm hover:bg-red-700 transition-colors"
