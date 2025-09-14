@@ -22,26 +22,36 @@ export default function CompanySettingsPage() {
   useEffect(() => {
     const checkUser = async () => {
       try {
+        console.log('Company settings: Starting authentication check')
+        
         // Import the shared Supabase client
         const { supabase: getSupabaseClient } = await import('../../../lib/supabaseClient')
         const supabase = getSupabaseClient()
         
         const { data: { session }, error } = await supabase.auth.getSession()
         
+        console.log('Company settings: Session check result:', { session: !!session, user: !!session?.user, error })
+        
         if (!session?.user) {
+          console.log('Company settings: No session, redirecting to login')
           window.location.href = '/'
           return
         }
 
+        console.log('Company settings: User authenticated:', session.user.email)
         setUser(session.user)
 
         // For now, assume admin role
         setIsAdmin(true)
+        console.log('Company settings: Admin role set')
 
-        // Load company data (you'll need to implement this API)
+        // Load company data
+        console.log('Company settings: Loading company data')
         await loadCompanyData()
+        console.log('Company settings: Company data loaded')
         setLoading(false)
       } catch (error) {
+        console.error('Company settings: Authentication error:', error)
         window.location.href = '/'
       }
     }
@@ -51,9 +61,11 @@ export default function CompanySettingsPage() {
 
   const loadCompanyData = async () => {
     try {
+      console.log('Company settings: Fetching company data from API')
       const response = await fetch('/api/company/get')
+      console.log('Company settings: API response status:', response.status)
+      
       const data = await response.json()
-
       console.log('Raw data from API:', data)
       console.log('Company object:', data.company)
 
