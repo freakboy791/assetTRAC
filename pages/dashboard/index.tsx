@@ -51,10 +51,19 @@ export default function DashboardPage() {
 
   const handleSignOut = async () => {
     try {
-      // We'll need to create an API route for sign out
-      await fetch('/api/auth/signout', { method: 'POST' })
+      // Import Supabase client dynamically
+      const { createClient } = await import('@supabase/supabase-js')
+      const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      )
+      
+      await supabase.auth.signOut()
       window.location.href = '/'
     } catch (error) {
+      console.error('Error signing out:', error)
+      // Still redirect even if signout fails
+      window.location.href = '/'
     }
   }
 
