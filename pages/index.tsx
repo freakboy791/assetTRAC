@@ -133,45 +133,60 @@ export default function HomePage() {
 
         if (!inviteData.invitation) {
           // No invitation found - user doesn't exist in our system
+          console.log('No invitation found - user does not exist in our system')
           setAccountExists(false)
           setMessage('No account exists for this email address. Please contact your manager or the assetTRAC Admin to request an invitation.')
           return
         }
 
-        // User exists in our system, now try to authenticate with Supabase
-        console.log('User found in our system, attempting Supabase authentication...')
+        console.log('User found in our system, checking invitation status...')
         
-        // Import the shared Supabase client
-        const { supabase: getSupabaseClient } = await import('../lib/supabaseClient')
-        const supabase = getSupabaseClient()
-        
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        })
+        // Check invitation status and provide appropriate message
+        if (inviteData.invitation.status === 'pending') {
+          setMessage('You have a pending invitation. Please check your email and click the invitation link to activate your account.')
+          return
+        } else if (inviteData.invitation.status === 'email_confirmed' && !inviteData.invitation.admin_approved_at) {
+          setMessage('Your account is waiting for admin approval. Please contact your administrator to approve your account.')
+          return
+        } else if (inviteData.invitation.status === 'completed') {
+          // User has completed the invitation process, now try to authenticate with Supabase
+          console.log('User has completed invitation, attempting Supabase authentication...')
+          
+          // Import the shared Supabase client
+          const { supabase: getSupabaseClient } = await import('../lib/supabaseClient')
+          const supabase = getSupabaseClient()
+          
+          const { data, error } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+          })
 
-        console.log('Sign in response:', error ? 'Error' : 'Success')
-        console.log('Sign in result:', error ? error.message : 'User logged in')
-        console.log('Full error object:', error)
-        console.log('Full data object:', data)
+          console.log('Sign in response:', error ? 'Error' : 'Success')
+          console.log('Sign in result:', error ? error.message : 'User logged in')
+          console.log('Full error object:', error)
+          console.log('Full data object:', data)
 
-        if (error) {
-          if (error.message.includes('Email not confirmed')) {
-            setMessage('Please check your email and click the confirmation link before logging in. If you need a new confirmation email, try registering again.')
-          } else if (error.message.includes('Invalid login credentials')) {
-            setAccountExists(true)
-            setMessage('The password you entered is incorrect. Please try again or use the "Reset Password" button below if you forgot your password.')
-          } else if (error.message.includes('User not found') || error.message.includes('Invalid email')) {
-            setAccountExists(false)
-            setMessage('No account exists for this email address. Please contact your manager or the assetTRAC Admin to request an invitation.')
+          if (error) {
+            if (error.message.includes('Email not confirmed')) {
+              setMessage('Please check your email and click the confirmation link before logging in. If you need a new confirmation email, try registering again.')
+            } else if (error.message.includes('Invalid login credentials')) {
+              setAccountExists(true)
+              setMessage('The password you entered is incorrect. Please try again or use the "Reset Password" button below if you forgot your password.')
+            } else if (error.message.includes('User not found') || error.message.includes('Invalid email')) {
+              setAccountExists(false)
+              setMessage('No account exists for this email address. Please contact your manager or the assetTRAC Admin to request an invitation.')
+            } else {
+              setAccountExists(false)
+              setMessage(`Login error: ${error.message}`)
+            }
           } else {
-            setAccountExists(false)
-            setMessage(`Login error: ${error.message}`)
+            // Successful login - redirect to dashboard
+            console.log('Login successful! Redirecting to dashboard...')
+            window.location.href = '/dashboard'
           }
         } else {
-          // Successful login - redirect to dashboard
-          console.log('Login successful! Redirecting to dashboard...')
-          window.location.href = '/dashboard'
+          // Other invitation status
+          setMessage('Your account status is unclear. Please contact your administrator for assistance.')
         }
       } catch (systemError) {
         console.error('Error checking user in our system:', systemError)
