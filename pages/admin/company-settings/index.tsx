@@ -98,6 +98,8 @@ export default function CompanySettingsPage() {
     setMessage('')
     
     try {
+      console.log('Company settings: Sending data to save:', companyData)
+      
       const response = await fetch('/api/company/save', {
         method: 'POST',
         headers: {
@@ -106,12 +108,17 @@ export default function CompanySettingsPage() {
         body: JSON.stringify({ companyData }),
       })
 
+      console.log('Company settings: Save response status:', response.status)
       const data = await response.json()
+      console.log('Company settings: Save response data:', data)
 
       if (response.ok) {
         setMessage(data.message || 'Company settings saved successfully!')
       } else {
         setMessage(data.error || 'Error saving company settings. Please try again.')
+        if (data.details) {
+          console.error('Company settings: Error details:', data.details)
+        }
       }
     } catch (error) {
       console.error('Error saving company data:', error)

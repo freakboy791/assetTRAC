@@ -21,41 +21,53 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    console.log('Company save API: Received data:', companyData)
+    
     // Check if company already exists
     const { data: existingCompanies, error: fetchError } = await supabase
       .from('companies')
       .select('id')
       .limit(1)
 
+    console.log('Company save API: Existing companies check:', { existingCompanies, fetchError })
+
     if (fetchError) {
       console.log('Error checking existing company:', fetchError)
-      return res.status(500).json({ error: 'Failed to check existing company' })
+      return res.status(500).json({ error: 'Failed to check existing company', details: fetchError })
     }
 
     let result
     if (existingCompanies && existingCompanies.length > 0) {
       // Update existing company
+      console.log('Company save API: Updating existing company with ID:', existingCompanies[0].id)
+      
+      const updateData = {
+        name: companyData.name,
+        street: companyData.street,
+        city: companyData.city,
+        state: companyData.state,
+        zip: companyData.zip,
+        phone: companyData.phone,
+        email: companyData.email,
+        website: companyData.website,
+        description: companyData.description,
+        depreciation_rate: companyData.depreciation_rate,
+        updated_at: new Date().toISOString()
+      }
+      
+      console.log('Company save API: Update data:', updateData)
+      
       const { data, error } = await supabase
         .from('companies')
-        .update({
-          name: companyData.name,
-          street: companyData.street,
-          city: companyData.city,
-          state: companyData.state,
-          zip: companyData.zip,
-          phone: companyData.phone,
-          email: companyData.email,
-          website: companyData.website,
-          description: companyData.description,
-          depreciation_rate: companyData.depreciation_rate,
-          updated_at: new Date().toISOString()
-        })
+        .update(updateData)
         .eq('id', existingCompanies[0].id)
         .select()
 
+      console.log('Company save API: Update result:', { data, error })
+
       if (error) {
         console.log('Error updating company:', error)
-        return res.status(500).json({ error: 'Failed to update company' })
+        return res.status(500).json({ error: 'Failed to update company', details: error })
       }
 
       result = data[0]
