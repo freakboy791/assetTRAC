@@ -18,7 +18,7 @@ export default function HomePage() {
     const checkUser = async () => {
       try {
         // Check authentication via API instead of direct Supabase call
-        const response = await fetch('/api/check-user-exists')
+        const response = await fetch('/api/auth/getUser')
         const data = await response.json()
         
         if (data.user) {
