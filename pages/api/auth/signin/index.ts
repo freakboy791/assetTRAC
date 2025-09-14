@@ -31,6 +31,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     console.log('Signin API: Found users:', users.users.length)
+    console.log('Signin API: User emails:', users.users.map(u => u.email))
     const userExists = users.users.some(user => user.email === email)
     console.log('Signin API: User exists:', userExists)
     
