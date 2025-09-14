@@ -175,9 +175,22 @@ export default function HomePage() {
               }
               return
             } else {
-              // Successful login
-              console.log('Login successful, redirecting to dashboard')
-              window.location.href = '/dashboard'
+              // Successful login - set session in Supabase client
+              console.log('Login successful, setting session and redirecting to dashboard')
+              
+              // Set the session in the Supabase client
+              const { data: { session } } = await supabase.auth.setSession({
+                access_token: result.session.access_token,
+                refresh_token: result.session.refresh_token
+              })
+              
+              if (session) {
+                console.log('Session set successfully, redirecting to dashboard')
+                window.location.href = '/dashboard'
+              } else {
+                console.error('Failed to set session')
+                setMessage('Login successful but session setup failed. Please try again.')
+              }
               return
             }
           } catch (authError) {
