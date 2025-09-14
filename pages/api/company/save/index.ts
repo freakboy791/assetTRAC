@@ -39,11 +39,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         .from('companies')
         .update({
           name: companyData.name,
-          address: companyData.address,
+          street: companyData.street,
+          city: companyData.city,
+          state: companyData.state,
+          zip: companyData.zip,
           phone: companyData.phone,
           email: companyData.email,
           website: companyData.website,
           description: companyData.description,
+          depreciation_rate: companyData.depreciation_rate,
           updated_at: new Date().toISOString()
         })
         .eq('id', existingCompanies[0].id)
@@ -61,11 +65,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         .from('companies')
         .insert({
           name: companyData.name,
-          address: companyData.address,
+          street: companyData.street,
+          city: companyData.city,
+          state: companyData.state,
+          zip: companyData.zip,
           phone: companyData.phone,
           email: companyData.email,
           website: companyData.website,
           description: companyData.description,
+          depreciation_rate: companyData.depreciation_rate,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         })

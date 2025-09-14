@@ -6,11 +6,15 @@ export default function CompanySettingsPage() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [companyData, setCompanyData] = useState({
     name: '',
-    address: '',
+    street: '',
+    city: '',
+    state: '',
+    zip: '',
     phone: '',
     email: '',
     website: '',
-    description: ''
+    description: '',
+    depreciation_rate: 0
   })
   const [message, setMessage] = useState('')
   const [saving, setSaving] = useState(false)
@@ -56,11 +60,15 @@ export default function CompanySettingsPage() {
       if (data.company) {
         const companyInfo = {
           name: data.company.name || '',
-          address: data.company.address || '',
+          street: data.company.street || '',
+          city: data.company.city || '',
+          state: data.company.state || '',
+          zip: data.company.zip || '',
           phone: data.company.phone || '',
           email: data.company.email || '',
           website: data.company.website || '',
-          description: data.company.description || ''
+          description: data.company.description || '',
+          depreciation_rate: data.company.depreciation_rate || 0
         }
         
         console.log('Processed company data:', companyInfo)
@@ -271,16 +279,73 @@ export default function CompanySettingsPage() {
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label htmlFor="companyStreet" className="block text-sm font-medium text-gray-700 mb-2">
+                    Street Address
+                  </label>
+                  <input
+                    type="text"
+                    id="companyStreet"
+                    value={companyData.street}
+                    onChange={(e) => setCompanyData({...companyData, street: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="companyCity" className="block text-sm font-medium text-gray-700 mb-2">
+                    City
+                  </label>
+                  <input
+                    type="text"
+                    id="companyCity"
+                    value={companyData.city}
+                    onChange={(e) => setCompanyData({...companyData, city: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="companyState" className="block text-sm font-medium text-gray-700 mb-2">
+                    State
+                  </label>
+                  <input
+                    type="text"
+                    id="companyState"
+                    value={companyData.state}
+                    onChange={(e) => setCompanyData({...companyData, state: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="companyZip" className="block text-sm font-medium text-gray-700 mb-2">
+                    ZIP Code
+                  </label>
+                  <input
+                    type="text"
+                    id="companyZip"
+                    value={companyData.zip}
+                    onChange={(e) => setCompanyData({...companyData, zip: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
               <div>
-                <label htmlFor="companyAddress" className="block text-sm font-medium text-gray-700 mb-2">
-                  Address
+                <label htmlFor="companyDepreciationRate" className="block text-sm font-medium text-gray-700 mb-2">
+                  Depreciation Rate (%)
                 </label>
-                <textarea
-                  id="companyAddress"
-                  rows={3}
-                  value={companyData.address}
-                  onChange={(e) => setCompanyData({...companyData, address: e.target.value})}
+                <input
+                  type="number"
+                  id="companyDepreciationRate"
+                  value={companyData.depreciation_rate}
+                  onChange={(e) => setCompanyData({...companyData, depreciation_rate: parseFloat(e.target.value) || 0})}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  step="0.01"
+                  min="0"
+                  max="100"
                 />
               </div>
 

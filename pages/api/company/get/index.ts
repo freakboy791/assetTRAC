@@ -32,11 +32,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         company: {
           id: null,
           name: '',
-          address: '',
+          street: '',
+          city: '',
+          state: '',
+          zip: '',
           phone: '',
           email: '',
           website: '',
           description: '',
+          depreciation_rate: 0,
           created_at: null,
           updated_at: null
         }
