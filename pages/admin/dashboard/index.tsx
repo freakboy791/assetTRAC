@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/router'
 import { Invitation } from '../../../types'
 
 // Make this page dynamic to avoid build-time issues
@@ -9,6 +10,7 @@ export async function getServerSideProps() {
 }
 
 export default function AdminDashboardPage() {
+  const router = useRouter()
   const [invitations, setInvitations] = useState<Invitation[]>([])
   const [loading, setLoading] = useState(true)
   const [user, setUser] = useState<any>(null)
@@ -255,7 +257,22 @@ export default function AdminDashboardPage() {
             <button
               onClick={() => {
                 console.log('Manage Company button clicked')
-                window.location.href = '/admin/company-settings'
+                console.log('Attempting to navigate to /admin/company-settings')
+                try {
+                  // Try Next.js router first
+                  router.push('/admin/company-settings')
+                  console.log('Router.push executed')
+                  
+                  // Fallback to window.location after a short delay
+                  setTimeout(() => {
+                    console.log('Fallback: Using window.location.href')
+                    window.location.href = '/admin/company-settings'
+                  }, 100)
+                } catch (error) {
+                  console.error('Navigation error:', error)
+                  // Final fallback
+                  window.location.href = '/admin/company-settings'
+                }
               }}
               className="bg-purple-600 text-white px-6 py-4 rounded-lg hover:bg-purple-700 transition-colors text-center"
             >
