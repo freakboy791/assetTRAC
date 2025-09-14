@@ -4,6 +4,7 @@ export default function CompanySettingsPage() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [userRoles, setUserRoles] = useState<string[]>([])
   const [companyData, setCompanyData] = useState({
     name: '',
     street: '',
@@ -40,7 +41,8 @@ export default function CompanySettingsPage() {
         console.log('Company settings: User authenticated:', session.user.email)
         setUser(session.user)
 
-        // For now, assume admin role
+        // For now, assume admin role (you can implement proper role checking later)
+        setUserRoles(['admin'])
         setIsAdmin(true)
         console.log('Company settings: Admin role set')
 
@@ -178,7 +180,27 @@ export default function CompanySettingsPage() {
             <div className="flex items-center space-x-4">
               <div className="flex flex-col items-end">
                 <span className="text-sm text-gray-700">Welcome, {user?.email}</span>
-                <span className="text-xs text-gray-500">Admin</span>
+                {userRoles.length > 0 && (
+                  <div className="flex items-center space-x-2 mt-1">
+                    <span className="text-xs text-gray-500">Role:</span>
+                    <div className="flex space-x-1">
+                      {userRoles.map((role, index) => (
+                        <span
+                          key={index}
+                          className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                            role === 'admin' 
+                              ? 'bg-purple-100 text-purple-800' 
+                              : role === 'owner'
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-blue-100 text-blue-800'
+                          }`}
+                        >
+                          {role.charAt(0).toUpperCase() + role.slice(1)}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
               <button
                 onClick={handleSignOut}
