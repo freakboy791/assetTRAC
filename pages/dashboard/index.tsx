@@ -73,10 +73,26 @@ export default function DashboardPage() {
   const loadInvitations = async () => {
     try {
       setInvitationsLoading(true)
-      const response = await fetch('/api/admin/invitations')
+      
+      // Get the current session token
+      const { supabase: getSupabaseClient } = await import('../../lib/supabaseClient')
+      const supabase = getSupabaseClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (!session?.access_token) {
+        console.error('No session token available')
+        return
+      }
+
+      const response = await fetch('/api/admin/invitations', {
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      })
       const data = await response.json()
 
       if (data.error) {
+        console.error('Error from API:', data.error)
         return
       }
 
@@ -90,10 +106,21 @@ export default function DashboardPage() {
 
   const handleApprove = async (invitationId: number) => {
     try {
+      // Get the current session token
+      const { supabase: getSupabaseClient } = await import('../../lib/supabaseClient')
+      const supabase = getSupabaseClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (!session?.access_token) {
+        console.error('No session token available')
+        return
+      }
+
       const response = await fetch('/api/admin/approve-invitation', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
         },
         body: JSON.stringify({ invitationId }),
       })
@@ -111,10 +138,21 @@ export default function DashboardPage() {
 
   const handleReject = async (invitationId: number) => {
     try {
+      // Get the current session token
+      const { supabase: getSupabaseClient } = await import('../../lib/supabaseClient')
+      const supabase = getSupabaseClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (!session?.access_token) {
+        console.error('No session token available')
+        return
+      }
+
       const response = await fetch('/api/admin/reject-invitation', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
         },
         body: JSON.stringify({ invitationId }),
       })
@@ -282,32 +320,6 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                <div className="bg-white overflow-hidden shadow rounded-lg">
-                  <div className="p-6">
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0">
-                        <div className="w-8 h-8 bg-purple-100 rounded-md flex items-center justify-center">
-                          <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                          </svg>
-                        </div>
-                      </div>
-                      <div className="ml-4">
-                        <h3 className="text-lg font-medium text-gray-900">Company Settings</h3>
-                        <p className="text-sm text-gray-500">Manage company details and settings</p>
-                      </div>
-                    </div>
-                    <div className="mt-4">
-                      <button
-                        onClick={() => window.location.href = '/admin/company-settings'}
-                        className="w-full bg-purple-600 text-white px-4 py-2 rounded-md text-sm hover:bg-purple-700 transition-colors"
-                      >
-                        Manage Company Settings
-                      </button>
-                    </div>
-                  </div>
-                </div>
               </>
             )}
 

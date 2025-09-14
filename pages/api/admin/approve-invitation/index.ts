@@ -13,19 +13,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: 'Invitation ID is required' })
     }
 
-    // Get the current user's session
-    const supabaseClient = supabase()
-    const { data: { session }, error: sessionError } = await supabaseClient.auth.getSession()
+    // Get the authorization header
+    const authHeader = req.headers.authorization
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Missing or invalid authorization header' })
+    }
+
+    const token = authHeader.substring(7) // Remove 'Bearer ' prefix
     
-    if (sessionError || !session?.user) {
-      return res.status(401).json({ error: 'Unauthorized' })
+    // Get the current user's session using the token
+    const supabaseClient = supabase()
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser(token)
+    
+    if (userError || !user) {
+      return res.status(401).json({ error: 'Invalid token' })
     }
 
     // Get user's company_id from their profile
     const { data: profile, error: profileError } = await supabaseClient
       .from('profiles')
       .select('company_id')
-      .eq('id', session.user.id)
+      .eq('id', user.id)
       .single()
 
     if (profileError || !profile?.company_id) {
