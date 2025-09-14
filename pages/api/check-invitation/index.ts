@@ -19,9 +19,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const { data: invitations, error } = await supabase
-      .from('invitations')
+      .from('invites')
       .select('*')
-      .eq('email', email)
+      .eq('invited_email', email)
       .order('created_at', { ascending: false })
       .limit(1)
 
