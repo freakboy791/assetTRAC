@@ -50,9 +50,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         phone: companyData.phone,
         email: companyData.email,
         website: companyData.website,
-        description: companyData.description,
-        depreciation_rate: companyData.depreciation_rate,
-        updated_at: new Date().toISOString()
+        depreciation_rate: companyData.depreciation_rate
+        // Note: removed description and updated_at as they may not exist in the table
       }
       
       console.log('Company save API: Update data:', updateData)
@@ -91,10 +90,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           phone: companyData.phone,
           email: companyData.email,
           website: companyData.website,
-          description: companyData.description,
-          depreciation_rate: companyData.depreciation_rate,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          depreciation_rate: companyData.depreciation_rate
+          // Note: removed description, created_at, and updated_at as they may not exist in the table
         })
         .select()
 

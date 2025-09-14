@@ -39,10 +39,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           phone: '',
           email: '',
           website: '',
-          description: '',
-          depreciation_rate: 0,
-          created_at: null,
-          updated_at: null
+          depreciation_rate: 0
         }
       })
     }
