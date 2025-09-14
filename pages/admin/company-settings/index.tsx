@@ -47,18 +47,22 @@ export default function CompanySettingsPage() {
 
   const loadCompanyData = async () => {
     try {
-      // TODO: Implement API to load company data
-      // For now, set placeholder data
-      setCompanyData({
-        name: 'Your Company Name',
-        address: '123 Main Street, City, State 12345',
-        phone: '(555) 123-4567',
-        email: 'contact@yourcompany.com',
-        website: 'https://yourcompany.com',
-        description: 'Your company description here...'
-      })
+      const response = await fetch('/api/company/get')
+      const data = await response.json()
+
+      if (data.company) {
+        setCompanyData({
+          name: data.company.name || '',
+          address: data.company.address || '',
+          phone: data.company.phone || '',
+          email: data.company.email || '',
+          website: data.company.website || '',
+          description: data.company.description || ''
+        })
+      }
     } catch (error) {
       console.error('Error loading company data:', error)
+      setMessage('Error loading company data. Please try again.')
     }
   }
 
@@ -67,14 +71,23 @@ export default function CompanySettingsPage() {
     setMessage('')
     
     try {
-      // TODO: Implement API to save company data
-      console.log('Saving company data:', companyData)
-      
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      
-      setMessage('Company settings saved successfully!')
+      const response = await fetch('/api/company/save', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ companyData }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        setMessage(data.message || 'Company settings saved successfully!')
+      } else {
+        setMessage(data.error || 'Error saving company settings. Please try again.')
+      }
     } catch (error) {
+      console.error('Error saving company data:', error)
       setMessage('Error saving company settings. Please try again.')
     } finally {
       setSaving(false)
