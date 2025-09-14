@@ -50,15 +50,21 @@ export default function CompanySettingsPage() {
       const response = await fetch('/api/company/get')
       const data = await response.json()
 
+      console.log('Raw data from API:', data)
+      console.log('Company object:', data.company)
+
       if (data.company) {
-        setCompanyData({
+        const companyInfo = {
           name: data.company.name || '',
           address: data.company.address || '',
           phone: data.company.phone || '',
           email: data.company.email || '',
           website: data.company.website || '',
           description: data.company.description || ''
-        })
+        }
+        
+        console.log('Processed company data:', companyInfo)
+        setCompanyData(companyInfo)
       }
     } catch (error) {
       console.error('Error loading company data:', error)

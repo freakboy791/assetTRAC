@@ -43,6 +43,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       })
     }
 
+    // Log the actual data being returned for debugging
+    console.log('Company data from database:', companies[0])
+    
     return res.status(200).json({ company: companies[0] })
   } catch (error) {
     console.log('Error in get company API:', error)
