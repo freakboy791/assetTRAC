@@ -268,31 +268,6 @@ export default function DashboardPage() {
             {/* Admin Actions */}
             {isAdmin && (
               <>
-                <div className="bg-white overflow-hidden shadow rounded-lg">
-                  <div className="p-6">
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0">
-                        <div className="w-8 h-8 bg-purple-100 rounded-md flex items-center justify-center">
-                          <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
-                          </svg>
-                        </div>
-                      </div>
-                      <div className="ml-4">
-                        <h3 className="text-lg font-medium text-gray-900">Admin Dashboard</h3>
-                        <p className="text-sm text-gray-500">Manage users and invitations</p>
-                      </div>
-                    </div>
-                    <div className="mt-4">
-                      <button
-                        onClick={() => window.location.href = '/admin/dashboard'}
-                        className="w-full bg-purple-600 text-white px-4 py-2 rounded-md text-sm hover:bg-purple-700 transition-colors"
-                      >
-                        Go to Admin Dashboard
-                      </button>
-                    </div>
-                  </div>
-                </div>
 
                 <div className="bg-white overflow-hidden shadow rounded-lg">
                   <div className="p-6">
