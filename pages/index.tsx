@@ -190,6 +190,7 @@ export default function HomePage() {
         }
       } else {
         // Successful login - redirect to dashboard
+        console.log('Login successful! Redirecting to dashboard...')
         window.location.href = '/dashboard'
       }
     } catch (error) {
