@@ -35,10 +35,8 @@ export default function AdminDashboardPage() {
         setUserRoles(['admin'])
         setIsAdmin(true)
 
-        // Load invitations (you'll need to implement this API route)
-        // For now, set empty array
-        setInvitations([])
-        setLoading(false)
+        // Load invitations
+        await loadInvitations()
       } catch (error) {
         window.location.href = '/'
       }
@@ -236,14 +234,35 @@ export default function AdminDashboardPage() {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-900">Manage Invitations</h2>
+          {/* Admin Action Buttons */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
             <button
               onClick={() => window.location.href = '/admin/invite'}
-              className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors"
+              className="bg-indigo-600 text-white px-6 py-4 rounded-lg hover:bg-indigo-700 transition-colors text-center"
             >
-              Send New Invitation
+              <div className="text-lg font-semibold">Send an Invite</div>
+              <div className="text-sm opacity-90">Invite new users to the system</div>
             </button>
+            
+            <button
+              onClick={() => window.location.href = '/admin/dashboard'}
+              className="bg-green-600 text-white px-6 py-4 rounded-lg hover:bg-green-700 transition-colors text-center"
+            >
+              <div className="text-lg font-semibold">Manage Invites</div>
+              <div className="text-sm opacity-90">View and manage all invitations</div>
+            </button>
+            
+            <button
+              onClick={() => window.location.href = '/admin/company-settings'}
+              className="bg-purple-600 text-white px-6 py-4 rounded-lg hover:bg-purple-700 transition-colors text-center"
+            >
+              <div className="text-lg font-semibold">Manage Company Settings</div>
+              <div className="text-sm opacity-90">Update company details and settings</div>
+            </button>
+          </div>
+
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold text-gray-900">Invitation Management</h2>
           </div>
 
           {/* Summary Statistics */}
