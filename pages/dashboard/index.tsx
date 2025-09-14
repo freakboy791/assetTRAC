@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { Invitation } from '../../types'
 
 export default function DashboardPage() {
   const [user, setUser] = useState<any>(null)
@@ -8,6 +9,8 @@ export default function DashboardPage() {
   const [isOwner, setIsOwner] = useState(false)
   const [hasCompany, setHasCompany] = useState(false)
   const [userRoles, setUserRoles] = useState<string[]>([])
+  const [invitations, setInvitations] = useState<Invitation[]>([])
+  const [invitationsLoading, setInvitationsLoading] = useState(false)
 
   useEffect(() => {
     const checkUser = async () => {
@@ -35,6 +38,12 @@ export default function DashboardPage() {
         setIsAdmin(true)
         setHasCompany(true)
 
+        // Load invitations if user is admin
+        if (true) { // Since we're setting isAdmin to true above
+          console.log('Dashboard: User is admin, loading invitations...')
+          await loadInvitations()
+        }
+
         console.log('Dashboard: Setting loading to false')
         setLoading(false)
       } catch (error) {
@@ -58,6 +67,94 @@ export default function DashboardPage() {
       console.error('Error signing out:', error)
       // Still redirect even if signout fails
       window.location.href = '/'
+    }
+  }
+
+  const loadInvitations = async () => {
+    try {
+      setInvitationsLoading(true)
+      const response = await fetch('/api/admin/invitations')
+      const data = await response.json()
+
+      if (data.error) {
+        return
+      }
+
+      setInvitations(data.invitations || [])
+    } catch (error) {
+      console.error('Error loading invitations:', error)
+    } finally {
+      setInvitationsLoading(false)
+    }
+  }
+
+  const handleApprove = async (invitationId: number) => {
+    try {
+      const response = await fetch('/api/admin/approve-invitation', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ invitationId }),
+      })
+
+      if (!response.ok) {
+        return
+      }
+
+      // Reload invitations
+      loadInvitations()
+    } catch (error) {
+      console.error('Error approving invitation:', error)
+    }
+  }
+
+  const handleReject = async (invitationId: number) => {
+    try {
+      const response = await fetch('/api/admin/reject-invitation', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ invitationId }),
+      })
+
+      if (!response.ok) {
+        return
+      }
+
+      // Reload invitations
+      loadInvitations()
+    } catch (error) {
+      console.error('Error rejecting invitation:', error)
+    }
+  }
+
+  const getUserActivationStatus = (invitation: Invitation) => {
+    if (invitation.status === 'pending') {
+      return { text: 'Not Activated', color: 'bg-yellow-100 text-yellow-800' }
+    } else if (invitation.email_confirmed_at) {
+      return { text: 'Activated', color: 'bg-green-100 text-green-800' }
+    } else if (invitation.status === 'completed') {
+      return { text: 'Activated', color: 'bg-green-100 text-green-800' }
+    } else {
+      return { text: 'Unknown', color: 'bg-gray-100 text-gray-800' }
+    }
+  }
+
+  const getAdminApprovalStatus = (invitation: Invitation) => {
+    if (invitation.admin_approved_at) {
+      return { text: 'Approved', color: 'bg-green-100 text-green-800' }
+    } else if (invitation.status === 'email_confirmed') {
+      return { text: 'Unapproved', color: 'bg-red-100 text-red-800' }
+    } else if (invitation.status === 'completed') {
+      return { text: 'Approved', color: 'bg-green-100 text-green-800' }
+    } else if (invitation.status === 'pending') {
+      return { text: 'Unapproved', color: 'bg-red-100 text-red-800' }
+    } else if (invitation.status === 'expired') {
+      return { text: 'Rejected', color: 'bg-red-100 text-red-800' }
+    } else {
+      return { text: 'Unknown', color: 'bg-gray-100 text-gray-800' }
     }
   }
 
@@ -184,6 +281,33 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 </div>
+
+                <div className="bg-white overflow-hidden shadow rounded-lg">
+                  <div className="p-6">
+                    <div className="flex items-center">
+                      <div className="flex-shrink-0">
+                        <div className="w-8 h-8 bg-purple-100 rounded-md flex items-center justify-center">
+                          <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          </svg>
+                        </div>
+                      </div>
+                      <div className="ml-4">
+                        <h3 className="text-lg font-medium text-gray-900">Company Settings</h3>
+                        <p className="text-sm text-gray-500">Manage company details and settings</p>
+                      </div>
+                    </div>
+                    <div className="mt-4">
+                      <button
+                        onClick={() => window.location.href = '/admin/company-settings'}
+                        className="w-full bg-purple-600 text-white px-4 py-2 rounded-md text-sm hover:bg-purple-700 transition-colors"
+                      >
+                        Manage Company Settings
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </>
             )}
 
@@ -245,6 +369,163 @@ export default function DashboardPage() {
               </div>
             )}
           </div>
+
+          {/* Invitation Management - Admin Only */}
+          {isAdmin && (
+            <div className="mb-8">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-gray-900">Invitation Management</h2>
+                <button
+                  onClick={loadInvitations}
+                  disabled={invitationsLoading}
+                  className="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                >
+                  {invitationsLoading ? 'Loading...' : 'Refresh'}
+                </button>
+              </div>
+
+              {/* Summary Statistics */}
+              {!invitationsLoading && invitations.length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                  <div className="bg-white p-4 rounded-lg shadow">
+                    <div className="text-2xl font-bold text-gray-900">
+                      {invitations.filter(inv => inv.status === 'pending').length}
+                    </div>
+                    <div className="text-sm text-gray-600">Pending Activation</div>
+                  </div>
+                  <div className="bg-white p-4 rounded-lg shadow">
+                    <div className="text-2xl font-bold text-yellow-600">
+                      {invitations.filter(inv => (inv.status === 'pending' || inv.status === 'email_confirmed') && !inv.admin_approved_at).length}
+                    </div>
+                    <div className="text-sm text-gray-600">Awaiting Approval</div>
+                  </div>
+                  <div className="bg-white p-4 rounded-lg shadow">
+                    <div className="text-2xl font-bold text-green-600">
+                      {invitations.filter(inv => inv.admin_approved_at && inv.status !== 'completed').length}
+                    </div>
+                    <div className="text-sm text-gray-600">Approved</div>
+                  </div>
+                  <div className="bg-white p-4 rounded-lg shadow">
+                    <div className="text-2xl font-bold text-purple-600">
+                      {invitations.filter(inv => inv.status === 'completed' && inv.admin_approved_at).length}
+                    </div>
+                    <div className="text-sm text-gray-600">Completed</div>
+                  </div>
+                </div>
+              )}
+
+              {invitationsLoading ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
+                  <p className="mt-2 text-gray-600">Loading invitations...</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {invitations.length === 0 ? (
+                    <div className="text-center py-8">
+                      <p className="text-gray-500">No invitations found.</p>
+                    </div>
+                  ) : (
+                    <ul className="space-y-4">
+                      {invitations.map((invitation) => (
+                        <li key={invitation.id} className="px-6 py-4 bg-white border border-gray-200 rounded-lg shadow-sm">
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center justify-between">
+                                <p className="text-sm font-medium text-gray-900">
+                                  {invitation.invited_email}
+                                </p>
+                                <div className="flex items-center space-x-2">
+                                  <span className="text-xs text-gray-500">Role: {invitation.role}</span>
+                                </div>
+                              </div>
+                              <p className="text-sm text-gray-500">
+                                Company: {invitation.company_name}
+                              </p>
+                              
+                              {/* Status Indicators */}
+                              <div className="flex items-center space-x-4 mt-2">
+                                <div className="flex items-center space-x-2">
+                                  <span className="text-xs text-gray-600 font-medium">User Activation:</span>
+                                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getUserActivationStatus(invitation).color}`}>
+                                    {getUserActivationStatus(invitation).text}
+                                  </span>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <span className="text-xs text-gray-600 font-medium">Admin Approval:</span>
+                                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getAdminApprovalStatus(invitation).color}`}>
+                                    {getAdminApprovalStatus(invitation).text}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Timestamps */}
+                              <div className="flex items-center space-x-4 mt-2 text-xs text-gray-400">
+                                <span>Created: {new Date(invitation.created_at).toLocaleDateString()}</span>
+                                {invitation.email_confirmed_at && (
+                                  <span>Activated: {new Date(invitation.email_confirmed_at).toLocaleDateString()}</span>
+                                )}
+                                {invitation.admin_approved_at && (
+                                  <span>Approved: {new Date(invitation.admin_approved_at).toLocaleDateString()}</span>
+                                )}
+                              </div>
+
+                              {invitation.message && (
+                                <p className="text-sm text-gray-500 mt-2">
+                                  Message: {invitation.message}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex flex-col items-end space-y-2">
+                              {/* Action Buttons */}
+                              {invitation.status === 'email_confirmed' && !invitation.admin_approved_at && (
+                                <div className="flex items-center space-x-2">
+                                  <button
+                                    onClick={() => handleApprove(invitation.id)}
+                                    className="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700 transition-colors"
+                                  >
+                                    Approve
+                                  </button>
+                                  <button
+                                    onClick={() => handleReject(invitation.id)}
+                                    className="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700 transition-colors"
+                                  >
+                                    Reject
+                                  </button>
+                                </div>
+                              )}
+                              
+                              {/* Status Messages */}
+                              {invitation.status === 'pending' && (
+                                <span className="text-sm text-gray-500 text-right">
+                                  Waiting for user to activate
+                                </span>
+                              )}
+                              {invitation.admin_approved_at && invitation.status !== 'completed' && (
+                                <span className="text-sm text-green-600 text-right">
+                                  Approved - waiting for user completion
+                                </span>
+                              )}
+                              {invitation.status === 'completed' && invitation.admin_approved_at && (
+                                <span className="text-sm text-purple-600 text-right">
+                                  ✓ Completed
+                                </span>
+                              )}
+                              {invitation.status === 'expired' && (
+                                <span className="text-sm text-red-600 text-right">
+                                  ✗ Rejected/Expired
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Recent Activity */}
           <div className="bg-white shadow rounded-lg">
