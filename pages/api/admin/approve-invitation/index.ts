@@ -42,7 +42,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Verify the invitation belongs to the user's company
     const { data: invitation, error: invitationError } = await supabaseClient
-      .from('invitations')
+      .from('invites')
       .select('*')
       .eq('id', invitationId)
       .eq('company_id', companyUser.company_id)
@@ -54,7 +54,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Update the invitation with admin approval
     const { error: updateError } = await supabaseClient
-      .from('invitations')
+      .from('invites')
       .update({ 
         admin_approved_at: new Date().toISOString(),
         status: 'admin_approved'
