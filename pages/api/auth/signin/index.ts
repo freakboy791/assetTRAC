@@ -6,7 +6,7 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -21,6 +21,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    // First check if user exists
+    const { data: users, error: listError } = await supabase.auth.admin.listUsers()
+    
+    if (listError) {
+      return res.status(500).json({ message: 'Failed to check user existence' })
+    }
+
+    const userExists = users.users.some(user => user.email === email)
+    
+    if (!userExists) {
+      return res.status(400).json({ message: 'No account exists for this email address' })
+    }
+
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,

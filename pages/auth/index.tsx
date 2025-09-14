@@ -90,7 +90,11 @@ export default function AuthPage() {
       const result = await response.json()
 
       if (!response.ok) {
-        if (result.message.includes('Email not confirmed')) {
+        if (result.message.includes('No account exists for this email address')) {
+          setErrorType('email_not_found')
+          setAccountExists(false)
+          setMessage('No account exists for this email address. Please contact your manager or the assetTRAC Admin to request an invitation.')
+        } else if (result.message.includes('Email not confirmed')) {
           setErrorType('email_not_confirmed')
           setMessage('Please check your email and click the confirmation link before logging in. If you need a new confirmation email, try registering again.')
         } else if (result.message.includes('Invalid login credentials')) {
