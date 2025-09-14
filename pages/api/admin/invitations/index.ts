@@ -8,14 +8,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     // Get the current user's session
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+    const supabaseClient = supabase()
+    const { data: { session }, error: sessionError } = await supabaseClient.auth.getSession()
     
     if (sessionError || !session?.user) {
       return res.status(401).json({ error: 'Unauthorized' })
     }
 
     // Get user's company_id from their profile
-    const { data: profile, error: profileError } = await supabase
+    const { data: profile, error: profileError } = await supabaseClient
       .from('profiles')
       .select('company_id')
       .eq('id', session.user.id)
@@ -26,7 +27,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Get all invitations for the user's company
-    const { data: invitations, error: invitationsError } = await supabase
+    const { data: invitations, error: invitationsError } = await supabaseClient
       .from('invitations')
       .select('*')
       .eq('company_id', profile.company_id)

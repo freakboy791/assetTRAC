@@ -14,14 +14,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Get the current user's session
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+    const supabaseClient = supabase()
+    const { data: { session }, error: sessionError } = await supabaseClient.auth.getSession()
     
     if (sessionError || !session?.user) {
       return res.status(401).json({ error: 'Unauthorized' })
     }
 
     // Get user's company_id from their profile
-    const { data: profile, error: profileError } = await supabase
+    const { data: profile, error: profileError } = await supabaseClient
       .from('profiles')
       .select('company_id')
       .eq('id', session.user.id)
@@ -32,7 +33,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Verify the invitation belongs to the user's company
-    const { data: invitation, error: invitationError } = await supabase
+    const { data: invitation, error: invitationError } = await supabaseClient
       .from('invitations')
       .select('*')
       .eq('id', invitationId)
@@ -44,7 +45,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Update the invitation with admin approval
-    const { error: updateError } = await supabase
+    const { error: updateError } = await supabaseClient
       .from('invitations')
       .update({ 
         admin_approved_at: new Date().toISOString(),
