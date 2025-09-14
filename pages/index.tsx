@@ -424,7 +424,7 @@ export default function HomePage() {
 
             {message && (
               <div className={`mt-4 p-3 rounded-md text-sm ${
-                message.includes('error') || message.includes('Error') || message.includes('contact your manager') || message.includes('contact your administrator') || message.includes('request an invitation') || message.includes('incorrect password') || message.includes('password you entered is incorrect') || message.includes('Please fill in all fields') || message.includes('Please enter both email and password') || message.includes('Account not activated') || message.includes('waiting for admin approval')
+                message.includes('error') || message.includes('Error') || message.includes('contact your manager') || message.includes('contact your administrator') || message.includes('request an invitation') || message.includes('incorrect password') || message.includes('password you entered is incorrect') || message.includes('Invalid email or password') || message.includes('Please check your credentials') || message.includes('Please fill in all fields') || message.includes('Please enter both email and password') || message.includes('Account not activated') || message.includes('waiting for admin approval')
                   ? 'bg-red-50 text-red-700 border border-red-200' 
                   : message.includes('successfully') || message.includes('confirmed')
                   ? 'bg-green-50 text-green-700 border border-green-200'
