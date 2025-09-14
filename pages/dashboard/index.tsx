@@ -13,20 +13,25 @@ export default function DashboardPage() {
     const checkUser = async () => {
       console.log('Dashboard: Checking user authentication...')
       try {
-        // Check if user is authenticated by calling our API
-        const response = await fetch('/api/auth/getUser')
-        console.log('Dashboard: getUser response:', response.status)
-        const data = await response.json()
-        console.log('Dashboard: getUser data:', data)
+        // Import Supabase client dynamically
+        const { createClient } = await import('@supabase/supabase-js')
+        const supabase = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+        )
         
-        if (!data.user) {
+        const { data: { session }, error } = await supabase.auth.getSession()
+        console.log('Dashboard: Session check result:', error ? 'Error' : 'Success')
+        console.log('Dashboard: Session data:', session ? 'Session found' : 'No session')
+        
+        if (!session?.user) {
           console.log('Dashboard: No user found, redirecting to home')
           window.location.href = '/'
           return
         }
 
-        console.log('Dashboard: User found:', data.user.email)
-        setUser(data.user)
+        console.log('Dashboard: User found:', session.user.email)
+        setUser(session.user)
 
         // For now, set default values since we don't have the other APIs yet
         setUserRoles(['admin']) // Assume admin for now

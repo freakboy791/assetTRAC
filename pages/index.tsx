@@ -18,13 +18,18 @@ export default function HomePage() {
     const checkUser = async () => {
       console.log('Home page: Checking if user is already logged in...')
       try {
-        // Check authentication via API instead of direct Supabase call
-        const response = await fetch('/api/auth/getUser')
-        console.log('Home page: getUser response:', response.status)
-        const data = await response.json()
-        console.log('Home page: getUser data:', data)
+        // Import Supabase client dynamically
+        const { createClient } = await import('@supabase/supabase-js')
+        const supabase = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+        )
         
-        if (data.user) {
+        const { data: { session }, error } = await supabase.auth.getSession()
+        console.log('Home page: Session check result:', error ? 'Error' : 'Success')
+        console.log('Home page: Session data:', session ? 'Session found' : 'No session')
+        
+        if (session?.user) {
           console.log('Home page: User found, redirecting to dashboard')
           window.location.href = '/dashboard'
         } else {
