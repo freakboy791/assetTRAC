@@ -253,7 +253,10 @@ export default function AdminDashboardPage() {
             </button>
             
             <button
-              onClick={() => window.location.href = '/admin/company-settings'}
+              onClick={() => {
+                console.log('Manage Company button clicked')
+                window.location.href = '/admin/company-settings'
+              }}
               className="bg-purple-600 text-white px-6 py-4 rounded-lg hover:bg-purple-700 transition-colors text-center"
             >
               <div className="text-lg font-semibold">Manage Company Settings</div>
