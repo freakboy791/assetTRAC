@@ -13,7 +13,6 @@ export default function CompanySettingsPage() {
     zip: '',
     phone: '',
     email: '',
-    website: '',
     depreciation_rate: 0
   })
   const [message, setMessage] = useState('')
@@ -79,7 +78,6 @@ export default function CompanySettingsPage() {
           zip: data.company.zip || '',
           phone: data.company.phone || '',
           email: data.company.email || '',
-          website: data.company.website || '',
           depreciation_rate: data.company.depreciation_rate || 0
         }
         
@@ -306,30 +304,6 @@ export default function CompanySettingsPage() {
                   />
                 </div>
 
-                <div>
-                  <label htmlFor="companyWebsite" className="block text-sm font-medium text-gray-700 mb-2">
-                    Website
-                  </label>
-                  <input
-                    type="text"
-                    id="companyWebsite"
-                    value={companyData.website.replace(/^https?:\/\//, '')}
-                    onChange={(e) => {
-                      let website = e.target.value
-                      // Auto-add http:// if user enters www. or domain without protocol
-                      if (website && !website.startsWith('http://') && !website.startsWith('https://')) {
-                        if (website.startsWith('www.')) {
-                          website = 'http://' + website
-                        } else if (website.includes('.') && !website.includes(' ')) {
-                          website = 'http://' + website
-                        }
-                      }
-                      setCompanyData({...companyData, website: website})
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                    placeholder="www.example.com or example.com"
-                  />
-                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

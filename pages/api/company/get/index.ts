@@ -38,7 +38,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           zip: '',
           phone: '',
           email: '',
-          website: '',
           depreciation_rate: 0
         }
       })

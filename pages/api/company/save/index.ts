@@ -49,9 +49,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         zip: companyData.zip,
         phone: companyData.phone,
         email: companyData.email,
-        website: companyData.website,
         depreciation_rate: companyData.depreciation_rate
-        // Note: removed description and updated_at as they may not exist in the table
+        // Note: removed description, website, and updated_at as they may not exist in the table
       }
       
       console.log('Company save API: Update data:', updateData)
@@ -89,9 +88,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           zip: companyData.zip,
           phone: companyData.phone,
           email: companyData.email,
-          website: companyData.website,
           depreciation_rate: companyData.depreciation_rate
-          // Note: removed description, created_at, and updated_at as they may not exist in the table
+          // Note: removed description, website, created_at, and updated_at as they may not exist in the table
         })
         .select()
 
