@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next'
 import { createClient } from '@supabase/supabase-js'
+import { v4 as uuidv4 } from 'uuid'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -7,16 +8,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   // Disable SSL certificate verification for development
-  // WARNING: Only use this in development, never in production
   process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
 
   try {
-    const { email, companyName, invitationLink, message } = req.body
+    const { email, companyName, message } = req.body
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-    // Environment variables are available for use
 
     if (!supabaseUrl || !supabaseServiceKey) {
       return res.status(500).json({ 
@@ -34,51 +32,110 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     })
 
-    // Skip user existence check for now - let Supabase handle it during invitation
+    console.log('Send invite API: Starting invitation process for:', email)
 
-    // Send invitation email using Supabase admin functions
+    // Check if user already exists
+    const { data: existingUsers, error: listError } = await supabase.auth.admin.listUsers()
     
-    // Use custom redirect URL to ensure it goes to localhost:3000
-    const { data: inviteData, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(email, {
-      data: {
-        company_name: companyName,
-        invitation_link: invitationLink,
-        custom_message: message || null,
-        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days from now
-      },
-      redirectTo: invitationLink // This should force the redirect to your custom link
-    })
+    if (listError) {
+      console.error('Error listing users:', listError)
+      return res.status(500).json({ message: 'Failed to check existing users' })
+    }
 
-    if (inviteError) {
-      console.error('Invite error details:', {
-        message: inviteError.message,
-        status: inviteError.status,
-        code: inviteError.code
-      })
+    const userExists = existingUsers.users.some(user => user.email === email)
+    
+    if (userExists) {
+      console.log('User already exists, checking for existing invitation...')
       
-      // If user already exists, provide a helpful message
-      if (inviteError.message?.includes('already') || inviteError.message?.includes('exists')) {
+      // Check if there's already an invitation for this user
+      const { data: existingInvite, error: inviteCheckError } = await supabase
+        .from('invites')
+        .select('*')
+        .eq('email', email)
+        .single()
+
+      if (existingInvite) {
         return res.status(200).json({
           success: true,
-          message: `User with email ${email} already exists. Please send them this invitation link manually: ${invitationLink}`,
-          invitationLink,
+          message: `User with email ${email} already exists and has a pending invitation.`,
+          invitationLink: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/invite/accept/${existingInvite.token}`,
           userExists: true
         })
       }
-      
+    }
+
+    // Generate unique invitation token
+    const invitationToken = uuidv4()
+    const invitationLink = `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/invite/accept/${invitationToken}`
+    
+    console.log('Generated invitation token:', invitationToken)
+    console.log('Generated invitation link:', invitationLink)
+
+    // Create invitation record in database
+    const { data: inviteRecord, error: inviteError } = await supabase
+      .from('invites')
+      .insert({
+        email,
+        token: invitationToken,
+        company_name: companyName,
+        status: 'pending',
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
+        created_at: new Date().toISOString(),
+        custom_message: message || null
+      })
+      .select()
+      .single()
+
+    if (inviteError) {
+      console.error('Error creating invitation record:', inviteError)
       return res.status(500).json({ 
-        message: `Failed to send invitation email: ${inviteError.message}` 
+        message: `Failed to create invitation record: ${inviteError.message}` 
       })
     }
 
+    console.log('Invitation record created:', inviteRecord)
+
+    // Call custom email function
+    try {
+      const emailResponse = await fetch(`${supabaseUrl}/functions/v1/send-invite-email`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${supabaseServiceKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email,
+          companyName,
+          invitationLink,
+          message: message || null,
+          token: invitationToken
+        })
+      })
+
+      const emailResult = await emailResponse.json()
+      
+      if (!emailResponse.ok) {
+        console.error('Email function error:', emailResult)
+        // Don't fail the whole process if email fails, just log it
+        console.log('Email sending failed, but invitation record was created')
+      } else {
+        console.log('Email sent successfully:', emailResult)
+      }
+    } catch (emailError) {
+      console.error('Error calling email function:', emailError)
+      // Don't fail the whole process if email fails
+      console.log('Email sending failed, but invitation record was created')
+    }
 
     res.status(200).json({
       success: true,
-      message: `Invitation email sent successfully to ${email}`,
-      invitationLink
+      message: `Invitation created successfully for ${email}`,
+      invitationLink,
+      token: invitationToken
     })
 
   } catch (error: any) {
-    res.status(500).json({ message: `Failed to process invitation email: ${error.message}` })
+    console.error('Send invite API error:', error)
+    res.status(500).json({ message: `Failed to process invitation: ${error.message}` })
   }
 }
