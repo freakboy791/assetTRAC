@@ -16,16 +16,22 @@ export default function HomePage() {
   // Check if user is already logged in
   useEffect(() => {
     const checkUser = async () => {
+      console.log('Home page: Checking if user is already logged in...')
       try {
         // Check authentication via API instead of direct Supabase call
         const response = await fetch('/api/auth/getUser')
+        console.log('Home page: getUser response:', response.status)
         const data = await response.json()
+        console.log('Home page: getUser data:', data)
         
         if (data.user) {
+          console.log('Home page: User found, redirecting to dashboard')
           window.location.href = '/dashboard'
+        } else {
+          console.log('Home page: No user found, staying on home page')
         }
       } catch (error) {
-        // Silently handle errors
+        console.log('Home page: Error checking user:', error)
       }
     }
     checkUser()

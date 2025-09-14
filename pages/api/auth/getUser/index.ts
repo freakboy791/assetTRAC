@@ -15,14 +15,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const { data: { user }, error } = await supabase.auth.getUser()
+    // Get the session first
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
     
-    if (error) {
+    if (sessionError) {
+      console.log('getUser API: Session error:', sessionError)
       return res.status(200).json({ user: null })
     }
 
-    return res.status(200).json({ user })
+    if (!session) {
+      console.log('getUser API: No session found')
+      return res.status(200).json({ user: null })
+    }
+
+    console.log('getUser API: Session found, user:', session.user?.email)
+    return res.status(200).json({ user: session.user })
   } catch (error) {
+    console.log('getUser API: Error:', error)
     return res.status(200).json({ user: null })
   }
 }
