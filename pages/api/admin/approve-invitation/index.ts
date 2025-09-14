@@ -29,14 +29,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(401).json({ error: 'Invalid token' })
     }
 
-    // Get user's company_id from their profile
-    const { data: profile, error: profileError } = await supabaseClient
-      .from('profiles')
+    // Get user's company_id from company_users table
+    const { data: companyUser, error: companyUserError } = await supabaseClient
+      .from('company_users')
       .select('company_id')
-      .eq('id', user.id)
+      .eq('user_id', user.id)
       .single()
 
-    if (profileError || !profile?.company_id) {
+    if (companyUserError || !companyUser?.company_id) {
       return res.status(400).json({ error: 'User not associated with a company' })
     }
 
@@ -45,7 +45,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .from('invitations')
       .select('*')
       .eq('id', invitationId)
-      .eq('company_id', profile.company_id)
+      .eq('company_id', companyUser.company_id)
       .single()
 
     if (invitationError || !invitation) {
