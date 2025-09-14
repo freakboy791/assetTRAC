@@ -222,7 +222,7 @@ export default function CompanySettingsPage() {
                     type="number"
                     name="depreciation_rate"
                     id="depreciation_rate"
-                    value={companyData.depreciation_rate}
+                    value={companyData.depreciation_rate || ''}
                     onChange={handleInputChange}
                     min="0"
                     max="100"
@@ -291,12 +291,13 @@ export default function CompanySettingsPage() {
               </div>
 
               <div className="flex justify-end space-x-3">
-                <Link
-                  href="/dashboard"
+                <button
+                  type="button"
+                  onClick={() => window.location.href = '/dashboard'}
                   className="bg-gray-300 text-gray-700 px-4 py-2 rounded-md text-sm hover:bg-gray-400 transition-colors"
                 >
                   Cancel
-                </Link>
+                </button>
                 <button
                   type="submit"
                   disabled={submitting}
