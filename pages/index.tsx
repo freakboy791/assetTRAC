@@ -65,6 +65,8 @@ export default function HomePage() {
   }, [])
 
   const handleLogIn = async () => {
+    console.log('Login attempt started', { email, password: '***' })
+    
     if (!email || !password) {
       setMessage('Please fill in all fields')
       return
@@ -107,6 +109,7 @@ export default function HomePage() {
       }
 
       // Try to sign in via API
+      console.log('Attempting to sign in via API')
       const response = await fetch('/api/auth/signin', {
         method: 'POST',
         headers: {
@@ -115,7 +118,9 @@ export default function HomePage() {
         body: JSON.stringify({ email, password }),
       })
 
+      console.log('Sign in response:', response.status, response.statusText)
       const result = await response.json()
+      console.log('Sign in result:', result)
 
       if (!response.ok) {
         if (result.message.includes('Email not confirmed')) {
