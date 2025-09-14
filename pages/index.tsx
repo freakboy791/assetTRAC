@@ -140,37 +140,43 @@ export default function HomePage() {
             const { supabase: getSupabaseClient } = await import('../lib/supabaseClient')
             const supabase = getSupabaseClient()
             
-            const { data, error } = await supabase.auth.signInWithPassword({
-              email,
-              password,
+            // Use our custom API instead of direct Supabase call
+            const response = await fetch('/api/auth/signin', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ email, password }),
             })
 
+            const result = await response.json()
+            console.log('Login response:', { ok: response.ok, status: response.status, result })
+
+            // Convert API response to match expected format
+            const data = result.user ? { user: result.user, session: result.session } : null
+            const error = !response.ok ? { message: result.message } : null
+
             if (error) {
-              console.log('Supabase Auth error:', error)
+              console.log('Login error:', error)
               
-              // Check the specific error type
-              if (error.message.includes('Invalid login credentials') || 
-                  error.message.includes('Invalid email or password') ||
-                  error.message.includes('Email not confirmed')) {
-                // Account exists but wrong password or email not confirmed
-                setAccountExists(true)
-                setMessage('Invalid email or password. Please check your credentials and try again.')
-                return
-              } else if (error.message.includes('User not found') || 
-                        error.message.includes('No user found')) {
-                // No account exists
+              // Use the specific error message from our API
+              if (error.message === 'No account exists for this email address') {
                 setAccountExists(false)
                 setMessage('No account exists for this email address. Please contact your manager or the assetTRAC Admin to request an invitation.')
-                return
+              } else if (error.message === 'Invalid password') {
+                setAccountExists(true)
+                setMessage('The password you entered is incorrect. Please try again or use the "Reset Password" button below if you forgot your password.')
+              } else if (error.message.includes('Email not confirmed')) {
+                setAccountExists(true)
+                setMessage('Please check your email and click the confirmation link before logging in. If you need a new confirmation email, try registering again.')
               } else {
-                // Other error
-                setAccountExists(false)
-                setMessage('Login error: ' + error.message)
-                return
+                setAccountExists(true)
+                setMessage(error.message || 'Invalid email or password. Please check your credentials and try again.')
               }
+              return
             } else {
-              // Admin account found in Supabase Auth
-              console.log('Admin account found in Supabase Auth, login successful!')
+              // Successful login
+              console.log('Login successful, redirecting to dashboard')
               window.location.href = '/dashboard'
               return
             }
