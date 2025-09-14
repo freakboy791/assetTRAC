@@ -116,40 +116,67 @@ export default function HomePage() {
         }
       }
 
-      // Try to sign in directly with Supabase client
-      console.log('Attempting to sign in with Supabase client')
+      // First, check if user exists in our custom tables
+      console.log('Checking if user exists in our system...')
       
-      // Import the shared Supabase client
-      const { supabase: getSupabaseClient } = await import('../lib/supabaseClient')
-      const supabase = getSupabaseClient()
-      
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
+      try {
+        const inviteResponse = await fetch('/api/check-invitation', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ email }),
+        })
 
-      console.log('Sign in response:', error ? 'Error' : 'Success')
-      console.log('Sign in result:', error ? error.message : 'User logged in')
-      console.log('Full error object:', error)
-      console.log('Full data object:', data)
+        const inviteData = await inviteResponse.json()
+        console.log('Invitation check result:', inviteData)
 
-      if (error) {
-        if (error.message.includes('Email not confirmed')) {
-          setMessage('Please check your email and click the confirmation link before logging in. If you need a new confirmation email, try registering again.')
-        } else if (error.message.includes('Invalid login credentials')) {
-          setAccountExists(true)
-          setMessage('The password you entered is incorrect. Please try again or use the "Reset Password" button below if you forgot your password.')
-        } else if (error.message.includes('User not found') || error.message.includes('Invalid email')) {
+        if (!inviteData.invitation) {
+          // No invitation found - user doesn't exist in our system
           setAccountExists(false)
           setMessage('No account exists for this email address. Please contact your manager or the assetTRAC Admin to request an invitation.')
-        } else {
-          setAccountExists(false)
-          setMessage(`Login error: ${error.message}`)
+          return
         }
-      } else {
-        // Successful login - redirect to dashboard
-        console.log('Login successful! Redirecting to dashboard...')
-        window.location.href = '/dashboard'
+
+        // User exists in our system, now try to authenticate with Supabase
+        console.log('User found in our system, attempting Supabase authentication...')
+        
+        // Import the shared Supabase client
+        const { supabase: getSupabaseClient } = await import('../lib/supabaseClient')
+        const supabase = getSupabaseClient()
+        
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        })
+
+        console.log('Sign in response:', error ? 'Error' : 'Success')
+        console.log('Sign in result:', error ? error.message : 'User logged in')
+        console.log('Full error object:', error)
+        console.log('Full data object:', data)
+
+        if (error) {
+          if (error.message.includes('Email not confirmed')) {
+            setMessage('Please check your email and click the confirmation link before logging in. If you need a new confirmation email, try registering again.')
+          } else if (error.message.includes('Invalid login credentials')) {
+            setAccountExists(true)
+            setMessage('The password you entered is incorrect. Please try again or use the "Reset Password" button below if you forgot your password.')
+          } else if (error.message.includes('User not found') || error.message.includes('Invalid email')) {
+            setAccountExists(false)
+            setMessage('No account exists for this email address. Please contact your manager or the assetTRAC Admin to request an invitation.')
+          } else {
+            setAccountExists(false)
+            setMessage(`Login error: ${error.message}`)
+          }
+        } else {
+          // Successful login - redirect to dashboard
+          console.log('Login successful! Redirecting to dashboard...')
+          window.location.href = '/dashboard'
+        }
+      } catch (systemError) {
+        console.error('Error checking user in our system:', systemError)
+        setAccountExists(false)
+        setMessage('Unable to verify account. Please contact your manager or the assetTRAC Admin to request an invitation.')
       }
     } catch (error) {
       setMessage(`Unexpected error: ${error}`)
