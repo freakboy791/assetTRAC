@@ -67,7 +67,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       if (error) {
         console.log('Error updating company:', error)
-        return res.status(500).json({ error: 'Failed to update company', details: error })
+        console.log('Error details:', JSON.stringify(error, null, 2))
+        return res.status(500).json({ 
+          error: 'Failed to update company', 
+          details: error,
+          message: error.message,
+          code: error.code,
+          hint: error.hint
+        })
       }
 
       result = data[0]
