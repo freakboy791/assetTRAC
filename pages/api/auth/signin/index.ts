@@ -39,15 +39,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ message: 'No account exists for this email address' })
     }
 
+    // User exists, now try to sign in
+    console.log('Signin API: User exists, attempting sign in...')
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     })
 
     if (error) {
-      return res.status(400).json({ message: error.message })
+      console.log('Signin API: Supabase auth error:', error)
+      // If we get here, user exists but password is wrong
+      return res.status(400).json({ message: 'Invalid password' })
     }
 
+    console.log('Signin API: Sign in successful')
+    
     // Set the session in the response headers so the client can use it
     if (data.session) {
       res.setHeader('Set-Cookie', [
