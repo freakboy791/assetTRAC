@@ -34,10 +34,7 @@ export default function CompanySettingsPage() {
         
         if (!session?.user) {
           console.log('Company settings: No session, redirecting to login')
-          console.log('Company settings: Waiting 3 seconds before redirect...')
-          setTimeout(() => {
-            window.location.href = '/'
-          }, 3000)
+          window.location.href = '/'
           return
         }
 
@@ -55,10 +52,7 @@ export default function CompanySettingsPage() {
         setLoading(false)
       } catch (error) {
         console.error('Company settings: Authentication error:', error)
-        console.log('Company settings: Waiting 3 seconds before redirect due to error...')
-        setTimeout(() => {
-          window.location.href = '/'
-        }, 3000)
+        window.location.href = '/'
       }
     }
 
@@ -290,11 +284,23 @@ export default function CompanySettingsPage() {
                     Website
                   </label>
                   <input
-                    type="url"
+                    type="text"
                     id="companyWebsite"
-                    value={companyData.website}
-                    onChange={(e) => setCompanyData({...companyData, website: e.target.value})}
+                    value={companyData.website.replace(/^https?:\/\//, '')}
+                    onChange={(e) => {
+                      let website = e.target.value
+                      // Auto-add http:// if user enters www. or domain without protocol
+                      if (website && !website.startsWith('http://') && !website.startsWith('https://')) {
+                        if (website.startsWith('www.')) {
+                          website = 'http://' + website
+                        } else if (website.includes('.') && !website.includes(' ')) {
+                          website = 'http://' + website
+                        }
+                      }
+                      setCompanyData({...companyData, website: website})
+                    }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    placeholder="www.example.com or example.com"
                   />
                 </div>
               </div>
