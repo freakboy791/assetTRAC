@@ -26,13 +26,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .limit(1)
 
     if (error) {
-      return res.status(500).json({ error: 'Failed to check invitation' })
+      console.error('Supabase error:', error)
+      // Return empty invitation if table doesn't exist or other error
+      return res.status(200).json({ invitation: null })
     }
 
     const invitation = invitations && invitations.length > 0 ? invitations[0] : null
 
     return res.status(200).json({ invitation })
   } catch (error) {
-    return res.status(500).json({ error: 'Internal server error' })
+    console.error('API error:', error)
+    return res.status(200).json({ invitation: null })
   }
 }
