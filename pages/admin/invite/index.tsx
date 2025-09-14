@@ -102,17 +102,35 @@ export default function AdminInvitePage() {
       {/* Header */}
       <header className="bg-white shadow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* Breadcrumbs */}
+          <nav className="flex mb-4" aria-label="Breadcrumb">
+            <ol className="flex items-center space-x-4">
+              <li>
+                <div>
+                  <button
+                    onClick={() => window.location.href = '/dashboard'}
+                    className="text-gray-400 hover:text-gray-500"
+                  >
+                    <svg className="flex-shrink-0 h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
+                    </svg>
+                    <span className="sr-only">Dashboard</span>
+                  </button>
+                </div>
+              </li>
+              <li>
+                <div className="flex items-center">
+                  <svg className="flex-shrink-0 h-5 w-5 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                  </svg>
+                  <span className="ml-4 text-sm font-medium text-gray-500">Send Invitation</span>
+                </div>
+              </li>
+            </ol>
+          </nav>
+
           <div className="flex justify-between items-center py-6">
             <div className="flex items-center">
-              <button
-                onClick={() => window.location.href = '/dashboard'}
-                className="mr-4 p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
-                title="Back to Dashboard"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                </svg>
-              </button>
               <div className="h-8 w-8 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full flex items-center justify-center mr-3">
                 <span className="text-sm font-bold text-white">AT</span>
               </div>
@@ -154,23 +172,6 @@ export default function AdminInvitePage() {
         </div>
       </header>
 
-      {/* Breadcrumb Navigation */}
-      <nav className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center space-x-2 py-3">
-            <button
-              onClick={() => window.location.href = '/dashboard'}
-              className="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
-            >
-              Dashboard
-            </button>
-            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-            <span className="text-gray-500 text-sm">Send Invitation</span>
-          </div>
-        </div>
-      </nav>
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
