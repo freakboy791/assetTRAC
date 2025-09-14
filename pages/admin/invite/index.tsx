@@ -162,15 +162,6 @@ export default function AdminInvitePage() {
               onClick={() => window.location.href = '/dashboard'}
               className="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
             >
-              Main Dashboard
-            </button>
-            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-            <button
-              onClick={() => window.location.href = '/dashboard'}
-              className="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
-            >
               Dashboard
             </button>
             <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
