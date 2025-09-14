@@ -47,17 +47,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ message: 'Invitation has already been used' })
     }
 
-    console.log('Validate invite API: Invitation found and valid:', invitation.email)
+    console.log('Validate invite API: Invitation found and valid:', invitation.invited_email)
 
     // Return the invitation data
     res.status(200).json({
       invitation: {
         id: invitation.id,
-        email: invitation.email,
-        invited_email: invitation.email, // For compatibility with frontend
+        email: invitation.invited_email,
+        invited_email: invitation.invited_email,
         company_name: invitation.company_name,
         status: invitation.status,
-        message: invitation.custom_message,
+        message: invitation.message,
         created_by: invitation.created_by || 'Admin',
         expires_at: invitation.expires_at,
         created_at: invitation.created_at

@@ -51,7 +51,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const { data: existingInvite, error: inviteCheckError } = await supabase
         .from('invites')
         .select('*')
-        .eq('email', email)
+        .eq('invited_email', email)
         .single()
 
       if (existingInvite) {
@@ -75,13 +75,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { data: inviteRecord, error: inviteError } = await supabase
       .from('invites')
       .insert({
-        email,
+        invited_email: email, // Use invited_email instead of email
         token: invitationToken,
         company_name: companyName,
         status: 'pending',
         expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
         created_at: new Date().toISOString(),
-        custom_message: message || null
+        message: message || null, // Use message instead of custom_message
+        role: 'user', // Add default role
+        used: false, // Add used flag
+        created_by: 'admin' // Add created_by
       })
       .select()
       .single()

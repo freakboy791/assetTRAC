@@ -47,11 +47,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ message: 'Invitation has already been used' })
     }
 
-    console.log('Accept invite API: Invitation found, creating user account for:', invitation.email)
+    console.log('Accept invite API: Invitation found, creating user account for:', invitation.invited_email)
 
     // Create user account using Supabase Admin
     const { data: userData, error: userError } = await supabase.auth.admin.createUser({
-      email: invitation.email,
+      email: invitation.invited_email,
       password: password,
       email_confirm: true, // Auto-confirm email since they're accepting an invitation
       user_metadata: {
@@ -91,7 +91,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .from('profiles')
       .insert({
         id: userData.user?.id,
-        email: invitation.email,
+        email: invitation.invited_email,
         company_name: invitation.company_name,
         role: 'user', // Default role for invited users
         created_at: new Date().toISOString()
