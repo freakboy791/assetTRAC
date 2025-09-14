@@ -11,16 +11,21 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const checkUser = async () => {
+      console.log('Dashboard: Checking user authentication...')
       try {
         // Check if user is authenticated by calling our API
         const response = await fetch('/api/auth/getUser')
+        console.log('Dashboard: getUser response:', response.status)
         const data = await response.json()
+        console.log('Dashboard: getUser data:', data)
         
         if (!data.user) {
+          console.log('Dashboard: No user found, redirecting to home')
           window.location.href = '/'
           return
         }
 
+        console.log('Dashboard: User found:', data.user.email)
         setUser(data.user)
 
         // For now, set default values since we don't have the other APIs yet
@@ -28,8 +33,10 @@ export default function DashboardPage() {
         setIsAdmin(true)
         setHasCompany(true)
 
+        console.log('Dashboard: Setting loading to false')
         setLoading(false)
       } catch (error) {
+        console.error('Dashboard: Error checking user:', error)
         window.location.href = '/'
       }
     }
