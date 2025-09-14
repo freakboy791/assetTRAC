@@ -146,11 +146,28 @@ export default function HomePage() {
             })
 
             if (error) {
-              // Not a valid account in Supabase either
-              console.log('No account found in Supabase Auth either')
-              setAccountExists(false)
-              setMessage('No account exists for this email address. Please contact your manager or the assetTRAC Admin to request an invitation.')
-              return
+              console.log('Supabase Auth error:', error)
+              
+              // Check the specific error type
+              if (error.message.includes('Invalid login credentials') || 
+                  error.message.includes('Invalid email or password') ||
+                  error.message.includes('Email not confirmed')) {
+                // Account exists but wrong password or email not confirmed
+                setAccountExists(true)
+                setMessage('Invalid email or password. Please check your credentials and try again.')
+                return
+              } else if (error.message.includes('User not found') || 
+                        error.message.includes('No user found')) {
+                // No account exists
+                setAccountExists(false)
+                setMessage('No account exists for this email address. Please contact your manager or the assetTRAC Admin to request an invitation.')
+                return
+              } else {
+                // Other error
+                setAccountExists(false)
+                setMessage('Login error: ' + error.message)
+                return
+              }
             } else {
               // Admin account found in Supabase Auth
               console.log('Admin account found in Supabase Auth, login successful!')
