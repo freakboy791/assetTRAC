@@ -19,7 +19,8 @@ export default function HomePage() {
       console.log('Home page: Checking if user is already logged in...')
       try {
         // Import the shared Supabase client
-        const { supabase } = await import('../lib/supabaseClient')
+        const { supabase: getSupabaseClient } = await import('../lib/supabaseClient')
+        const supabase = getSupabaseClient()
         
         const { data: { session }, error } = await supabase.auth.getSession()
         console.log('Home page: Session check result:', error ? 'Error' : 'Success')
@@ -119,7 +120,8 @@ export default function HomePage() {
       console.log('Attempting to sign in with Supabase client')
       
       // Import the shared Supabase client
-      const { supabase } = await import('../lib/supabaseClient')
+      const { supabase: getSupabaseClient } = await import('../lib/supabaseClient')
+      const supabase = getSupabaseClient()
       
       const { data, error } = await supabase.auth.signInWithPassword({
         email,

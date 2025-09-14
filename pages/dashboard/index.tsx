@@ -14,7 +14,8 @@ export default function DashboardPage() {
       console.log('Dashboard: Checking user authentication...')
       try {
         // Import the shared Supabase client
-        const { supabase } = await import('../lib/supabaseClient')
+        const { supabase: getSupabaseClient } = await import('../lib/supabaseClient')
+        const supabase = getSupabaseClient()
         
         const { data: { session }, error } = await supabase.auth.getSession()
         console.log('Dashboard: Session check result:', error ? 'Error' : 'Success')
@@ -48,7 +49,8 @@ export default function DashboardPage() {
   const handleSignOut = async () => {
     try {
       // Import the shared Supabase client
-      const { supabase } = await import('../lib/supabaseClient')
+      const { supabase: getSupabaseClient } = await import('../lib/supabaseClient')
+      const supabase = getSupabaseClient()
       
       await supabase.auth.signOut()
       window.location.href = '/'
