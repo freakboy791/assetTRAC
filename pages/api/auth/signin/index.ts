@@ -22,15 +22,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     // First check if user exists
+    console.log('Signin API: Checking if user exists for email:', email)
     const { data: users, error: listError } = await supabase.auth.admin.listUsers()
     
     if (listError) {
+      console.log('Signin API: Error listing users:', listError)
       return res.status(500).json({ message: 'Failed to check user existence' })
     }
 
+    console.log('Signin API: Found users:', users.users.length)
     const userExists = users.users.some(user => user.email === email)
+    console.log('Signin API: User exists:', userExists)
     
     if (!userExists) {
+      console.log('Signin API: No account exists for email:', email)
       return res.status(400).json({ message: 'No account exists for this email address' })
     }
 

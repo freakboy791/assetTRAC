@@ -88,6 +88,7 @@ export default function AuthPage() {
       })
 
       const result = await response.json()
+      console.log('Login response:', { ok: response.ok, status: response.status, result })
 
       if (!response.ok) {
         if (result.message.includes('No account exists for this email address')) {
