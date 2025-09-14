@@ -342,7 +342,7 @@ export default function DashboardPage() {
                   </div>
                   <div className="mt-4">
                     <button
-                      onClick={() => window.location.href = '/company/create'}
+                      onClick={() => window.location.href = '/admin/company-settings'}
                       className="w-full bg-blue-600 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-700 transition-colors"
                     >
                       Manage Company
