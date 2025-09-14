@@ -132,11 +132,37 @@ export default function HomePage() {
         console.log('Invitation check result:', inviteData)
 
         if (!inviteData.invitation) {
-          // No invitation found - user doesn't exist in our system
-          console.log('No invitation found - user does not exist in our system')
-          setAccountExists(false)
-          setMessage('No account exists for this email address. Please contact your manager or the assetTRAC Admin to request an invitation.')
-          return
+          // No invitation found - check if this might be an admin account
+          console.log('No invitation found - checking if this is an admin account...')
+          
+          // Try to authenticate with Supabase to see if it's an admin account
+          try {
+            const { supabase: getSupabaseClient } = await import('../lib/supabaseClient')
+            const supabase = getSupabaseClient()
+            
+            const { data, error } = await supabase.auth.signInWithPassword({
+              email,
+              password,
+            })
+
+            if (error) {
+              // Not a valid account in Supabase either
+              console.log('No account found in Supabase Auth either')
+              setAccountExists(false)
+              setMessage('No account exists for this email address. Please contact your manager or the assetTRAC Admin to request an invitation.')
+              return
+            } else {
+              // Admin account found in Supabase Auth
+              console.log('Admin account found in Supabase Auth, login successful!')
+              window.location.href = '/dashboard'
+              return
+            }
+          } catch (authError) {
+            console.log('Error checking Supabase Auth:', authError)
+            setAccountExists(false)
+            setMessage('No account exists for this email address. Please contact your manager or the assetTRAC Admin to request an invitation.')
+            return
+          }
         }
 
         console.log('User found in our system, checking invitation status...')
