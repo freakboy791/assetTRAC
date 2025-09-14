@@ -18,12 +18,8 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     const checkUser = async () => {
       try {
-        // Import Supabase client dynamically
-        const { createClient } = await import('@supabase/supabase-js')
-        const supabase = createClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-        )
+        // Import the shared Supabase client
+        const { supabase } = await import('../../../lib/supabaseClient')
         
         const { data: { session }, error } = await supabase.auth.getSession()
         
@@ -137,12 +133,8 @@ export default function AdminDashboardPage() {
 
   const handleSignOut = async () => {
     try {
-      // Import Supabase client dynamically
-      const { createClient } = await import('@supabase/supabase-js')
-      const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      )
+      // Import the shared Supabase client
+      const { supabase } = await import('../../../lib/supabaseClient')
       
       await supabase.auth.signOut()
       window.location.href = '/'

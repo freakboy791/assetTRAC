@@ -18,12 +18,8 @@ export default function HomePage() {
     const checkUser = async () => {
       console.log('Home page: Checking if user is already logged in...')
       try {
-        // Import Supabase client dynamically
-        const { createClient } = await import('@supabase/supabase-js')
-        const supabase = createClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-        )
+        // Import the shared Supabase client
+        const { supabase } = await import('../lib/supabaseClient')
         
         const { data: { session }, error } = await supabase.auth.getSession()
         console.log('Home page: Session check result:', error ? 'Error' : 'Success')
@@ -122,12 +118,8 @@ export default function HomePage() {
       // Try to sign in directly with Supabase client
       console.log('Attempting to sign in with Supabase client')
       
-      // Import Supabase client dynamically
-      const { createClient } = await import('@supabase/supabase-js')
-      const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      )
+      // Import the shared Supabase client
+      const { supabase } = await import('../lib/supabaseClient')
       
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
@@ -136,6 +128,8 @@ export default function HomePage() {
 
       console.log('Sign in response:', error ? 'Error' : 'Success')
       console.log('Sign in result:', error ? error.message : 'User logged in')
+      console.log('Full error object:', error)
+      console.log('Full data object:', data)
 
       if (error) {
         if (error.message.includes('Email not confirmed')) {
