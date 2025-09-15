@@ -48,9 +48,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     console.log('Validate invite API: Invitation found and valid:', invitation.invited_email)
+    console.log('Validate invite API: Full invitation data:', invitation)
 
     // Return the invitation data
-    res.status(200).json({
+    const responseData = {
       invitation: {
         id: invitation.id,
         email: invitation.invited_email,
@@ -58,11 +59,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         company_name: invitation.company_name,
         status: invitation.status,
         message: invitation.message,
+        role: invitation.role,
         created_by: invitation.created_by || 'Admin',
         expires_at: invitation.expires_at,
         created_at: invitation.created_at
       }
-    })
+    }
+    
+    console.log('Validate invite API: Sending response:', responseData)
+    res.status(200).json(responseData)
 
   } catch (error) {
     console.error('Validate invite API error:', error)

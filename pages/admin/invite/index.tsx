@@ -5,11 +5,62 @@ export default function AdminInvitePage() {
   const [invitedEmail, setInvitedEmail] = useState('')
   const [companyName, setCompanyName] = useState('')
   const [personalMessage, setPersonalMessage] = useState('')
+  const [userRole, setUserRole] = useState('')
   const [statusMessage, setStatusMessage] = useState('')
   const [loading, setLoading] = useState(false)
   const [user, setUser] = useState<any>(null)
   const [isAdmin, setIsAdmin] = useState(false)
   const [userRoles, setUserRoles] = useState<string[]>([])
+
+  const getRoleDescription = (role: string) => {
+    switch (role) {
+      case 'viewer-asset':
+        return 'Read-only access to asset information only. Can view asset details, status, and location.'
+      case 'viewer-financials':
+        return 'Read-only access to financial data only. Can view costs, depreciation, and financial reports.'
+      case 'viewer-both':
+        return 'Read-only access to both asset and financial data. Full viewer permissions.'
+      case 'tech':
+        return 'Asset management access. Can create, update, and manage company assets.'
+      case 'manager-asset':
+        return 'Management access with asset view permissions. Can approve Tech/Viewers, manage assets, and send invitations.'
+      case 'manager-financials':
+        return 'Management access with financials view permissions. Can approve Tech/Viewers, manage assets, and send invitations.'
+      case 'manager-both':
+        return 'Management access with both asset and financials permissions. Can approve Tech/Viewers, manage assets, and send invitations.'
+      case 'owner':
+        return 'Full company access. Can manage all settings, users, and will be redirected to company setup.'
+      default:
+        return 'Select a role to see description.'
+    }
+  }
+
+  const getAvailableRoles = (userRole: string) => {
+    const allRoles = [
+      { value: 'viewer-asset', label: 'Viewer - Asset View' },
+      { value: 'viewer-financials', label: 'Viewer - Financials View' },
+      { value: 'viewer-both', label: 'Viewer - Both Asset & Financials' },
+      { value: 'tech', label: 'Tech' },
+      { value: 'manager-asset', label: 'Manager - Asset View' },
+      { value: 'manager-financials', label: 'Manager - Financials View' },
+      { value: 'manager-both', label: 'Manager - Both Asset & Financials' },
+      { value: 'owner', label: 'Owner' }
+    ]
+
+    switch (userRole) {
+      case 'admin':
+        return allRoles // Admin can manage all roles
+      case 'owner':
+        return allRoles.filter(role => role.value !== 'admin') // Owner can manage all except admin
+      case 'manager':
+      case 'manager-asset':
+      case 'manager-financials':
+      case 'manager-both':
+        return allRoles.filter(role => !['admin', 'owner', 'manager-asset', 'manager-financials', 'manager-both'].includes(role.value)) // Manager can manage tech and viewers
+      default:
+        return [] // Other roles cannot send invitations
+    }
+  }
 
   useEffect(() => {
     const checkUser = async () => {
@@ -38,6 +89,24 @@ export default function AdminInvitePage() {
     checkUser()
   }, [])
 
+  const getDefaultRole = (currentUserRoles: string[], availableRoles: any[]) => {
+    // For admins, default to Owner; for others, use first available role
+    return currentUserRoles.includes('admin') && availableRoles.some(role => role.value === 'owner')
+      ? 'owner'
+      : availableRoles.length > 0 ? availableRoles[0].value : ''
+  }
+
+  // Set default role when userRoles are loaded
+  useEffect(() => {
+    if (userRoles.length > 0 && !userRole) {
+      const availableRoles = getAvailableRoles(userRoles[0])
+      if (availableRoles.length > 0) {
+        const defaultRole = getDefaultRole(userRoles, availableRoles)
+        setUserRole(defaultRole)
+      }
+    }
+  }, [userRoles, userRole])
+
   const handleSendInvite = async () => {
     if (!invitedEmail || !companyName) {
       setStatusMessage('Please fill in all required fields')
@@ -56,17 +125,26 @@ export default function AdminInvitePage() {
         body: JSON.stringify({
           email: invitedEmail,
           companyName: companyName,
-          message: personalMessage || null
+          message: personalMessage || null,
+          role: userRole
         })
       })
 
       const result = await response.json()
 
       if (response.ok) {
-        setStatusMessage('Invitation sent successfully!')
+        setStatusMessage(`Invitation sent successfully to ${invitedEmail}!`)
         setInvitedEmail('')
         setCompanyName('')
         setPersonalMessage('')
+        const availableRoles = getAvailableRoles(userRoles[0] || 'admin')
+        const defaultRole = getDefaultRole(userRoles, availableRoles)
+        setUserRole(defaultRole)
+        
+        // Redirect to dashboard after 2 seconds to show the success message
+        setTimeout(() => {
+          window.location.href = '/dashboard'
+        }, 2000)
       } else {
         setStatusMessage(`Error: ${result.message}`)
       }
@@ -210,6 +288,28 @@ export default function AdminInvitePage() {
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                     placeholder="Add a personal message to the invitation..."
                   />
+                </div>
+
+                <div>
+                  <label htmlFor="userRole" className="block text-sm font-medium text-gray-700">
+                    User Role *
+                  </label>
+                  <select
+                    id="userRole"
+                    value={userRole}
+                    onChange={(e) => setUserRole(e.target.value)}
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    required
+                  >
+                    {getAvailableRoles(userRoles[0] || 'admin').map((role) => (
+                      <option key={role.value} value={role.value}>
+                        {role.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    {getRoleDescription(userRole)}
+                  </p>
                 </div>
 
                 {statusMessage && (

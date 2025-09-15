@@ -33,13 +33,45 @@ export default function DashboardPage() {
         console.log('Dashboard: User found:', session.user.email)
         setUser(session.user)
 
-        // For now, set default values since we don't have the other APIs yet
-        setUserRoles(['admin']) // Assume admin for now
-        setIsAdmin(true)
-        setHasCompany(true)
+        // Get role information from session storage (set during login)
+        const storedRoles = sessionStorage.getItem('userRoles')
+        const storedIsAdmin = sessionStorage.getItem('isAdmin')
+        const storedIsOwner = sessionStorage.getItem('isOwner')
+        const storedHasCompany = sessionStorage.getItem('hasCompany')
+
+        let roles: string[] = []
+        let isOwnerRole = false
+        let hasCompanyData = false
+        let isAdminRole = false
+
+        if (storedRoles) {
+          roles = JSON.parse(storedRoles)
+          isOwnerRole = storedIsOwner === 'true'
+          hasCompanyData = storedHasCompany === 'true'
+          isAdminRole = storedIsAdmin === 'true'
+        } else {
+          // Fallback: check user metadata if session storage is empty
+          const userMetadata = session.user.user_metadata
+          roles = userMetadata?.roles || []
+          isOwnerRole = userMetadata?.isOwner || false
+          hasCompanyData = userMetadata?.hasCompany || false
+          isAdminRole = userMetadata?.isAdmin || false
+        }
+
+        setUserRoles(roles)
+        setIsAdmin(isAdminRole)
+        setIsOwner(isOwnerRole)
+        setHasCompany(hasCompanyData)
+
+        // If owner but no company, redirect to company creation
+        if (isOwnerRole && !hasCompanyData) {
+          console.log('Dashboard: Owner with no company, redirecting to company creation')
+          window.location.href = '/company/create'
+          return
+        }
 
         // Load invitations if user is admin
-        if (true) { // Since we're setting isAdmin to true above
+        if (isAdminRole) {
           console.log('Dashboard: User is admin, loading invitations...')
           await loadInvitations()
         }

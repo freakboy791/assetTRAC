@@ -11,7 +11,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
 
   try {
-    const { email, companyName, message } = req.body
+    const { email, companyName, message, role } = req.body
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -66,10 +66,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Generate unique invitation token
     const invitationToken = uuidv4()
-    const invitationLink = `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/invite/accept/${invitationToken}`
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
+    const invitationLink = `${baseUrl}/invitation/${invitationToken}`
     
     console.log('Generated invitation token:', invitationToken)
     console.log('Generated invitation link:', invitationLink)
+    console.log('Base URL used:', baseUrl)
 
     // Create invitation record in database
     const { data: inviteRecord, error: inviteError } = await supabase
@@ -82,9 +84,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
         created_at: new Date().toISOString(),
         message: message || null, // Use message instead of custom_message
-        role: 'user', // Add default role
+        role: role || 'user', // Use provided role or default to 'user'
         used: false, // Add used flag
-        created_by: 'admin' // Add created_by
+        created_by: null // Set to null for now since we don't have admin user ID
       })
       .select()
       .single()

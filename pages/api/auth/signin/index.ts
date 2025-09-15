@@ -55,6 +55,37 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     console.log('Signin API: Sign in successful')
     
+    // Fetch user's role information from the database
+    const { data: companyUsers, error: roleError } = await supabase
+      .from('company_users')
+      .select('role, companies(*)')
+      .eq('user_id', data.user.id)
+
+    if (roleError) {
+      console.error('Signin API: Error fetching user roles:', roleError)
+    }
+
+    // Determine user roles
+    const roles = companyUsers?.map(cu => cu.role) || []
+    const isAdmin = roles.includes('admin')
+    const isOwner = roles.includes('owner')
+    const hasCompany = companyUsers && companyUsers.length > 0
+
+    // Update user metadata with role information
+    const { error: updateError } = await supabase.auth.admin.updateUserById(data.user.id, {
+      user_metadata: {
+        ...data.user.user_metadata,
+        roles: roles,
+        isAdmin: isAdmin,
+        isOwner: isOwner,
+        hasCompany: hasCompany
+      }
+    })
+
+    if (updateError) {
+      console.error('Signin API: Error updating user metadata:', updateError)
+    }
+
     // Set the session in the response headers so the client can use it
     if (data.session) {
       res.setHeader('Set-Cookie', [
@@ -63,7 +94,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       ])
     }
 
-    return res.status(200).json({ user: data.user, session: data.session })
+    return res.status(200).json({ 
+      user: data.user, 
+      session: data.session,
+      userRoles: roles,
+      isAdmin,
+      isOwner,
+      hasCompany
+    })
   } catch (error) {
     return res.status(500).json({ message: 'Internal server error' })
   }

@@ -186,6 +186,21 @@ export default function HomePage() {
               
               if (session) {
                 console.log('Session set successfully, redirecting to dashboard')
+                
+                // Store role information in session storage for dashboard use
+                if (result.userRoles) {
+                  sessionStorage.setItem('userRoles', JSON.stringify(result.userRoles))
+                }
+                if (result.isAdmin !== undefined) {
+                  sessionStorage.setItem('isAdmin', result.isAdmin.toString())
+                }
+                if (result.isOwner !== undefined) {
+                  sessionStorage.setItem('isOwner', result.isOwner.toString())
+                }
+                if (result.hasCompany !== undefined) {
+                  sessionStorage.setItem('hasCompany', result.hasCompany.toString())
+                }
+                
                 window.location.href = '/dashboard'
               } else {
                 console.error('Failed to set session')

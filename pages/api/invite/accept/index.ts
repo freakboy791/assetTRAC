@@ -56,7 +56,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       email_confirm: true, // Auto-confirm email since they're accepting an invitation
       user_metadata: {
         company_name: invitation.company_name,
-        invited_via: 'admin_invitation'
+        invited_via: 'admin_invitation',
+        invitation_role: invitation.role,
+        invitation_company_id: invitation.company_id
       }
     })
 
@@ -93,7 +95,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         id: userData.user?.id,
         email: invitation.invited_email,
         company_name: invitation.company_name,
-        role: 'user', // Default role for invited users
+        role: invitation.role || 'user', // Use role from invitation or default to 'user'
         created_at: new Date().toISOString()
       })
 
@@ -104,10 +106,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     console.log('Accept invite API: Profile created successfully')
 
+    // Determine user roles and company status for session
+    const roles = [invitation.role || 'user']
+    const isAdmin = roles.includes('admin')
+    const isOwner = roles.includes('owner')
+    const hasCompany = invitation.company_id ? true : false
+
     res.status(200).json({
       success: true,
       message: 'Account created successfully! You can now log in.',
-      user: userData.user
+      user: userData.user,
+      userRoles: roles,
+      isAdmin,
+      isOwner,
+      hasCompany
     })
 
   } catch (error) {

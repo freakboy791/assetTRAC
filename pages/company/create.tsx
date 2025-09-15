@@ -31,9 +31,18 @@ export default function CreateCompanyPage() {
         }
 
         setUser(session.user)
+        
+        // Check if user has invitation metadata
+        const invitationData = session.user.user_metadata
+        if (invitationData?.company_name) {
+          setCompanyName(invitationData.company_name)
+        }
+        if (invitationData?.invited_email) {
+          setCompanyEmail(invitationData.invited_email)
+        }
 
         // For now, set default values since we don't have the other APIs yet
-        setUserRoles(['admin']) // Assume admin for now
+        setUserRoles(['owner']) // Assume owner for company creation
         setIsOwner(true)
         setHasCompany(false) // This is a create company page, so assume no company yet
 
@@ -256,9 +265,13 @@ export default function CreateCompanyPage() {
                     id="companyName"
                     value={companyName}
                     onChange={(e) => setCompanyName(e.target.value)}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    className={`mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm ${
+                      user?.user_metadata?.company_name ? 'bg-gray-100 cursor-not-allowed' : ''
+                    }`}
                     placeholder="Your Company Name"
                     required
+                    readOnly={!!user?.user_metadata?.company_name}
+                    disabled={!!user?.user_metadata?.company_name}
                   />
                 </div>
 
@@ -328,8 +341,12 @@ export default function CreateCompanyPage() {
                       id="companyEmail"
                       value={companyEmail}
                       onChange={(e) => setCompanyEmail(e.target.value)}
-                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                      className={`mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm ${
+                        user?.user_metadata?.invited_email ? 'bg-gray-100 cursor-not-allowed' : ''
+                      }`}
                       placeholder="contact@yourcompany.com"
+                      readOnly={!!user?.user_metadata?.invited_email}
+                      disabled={!!user?.user_metadata?.invited_email}
                     />
                   </div>
                 </div>
