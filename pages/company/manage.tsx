@@ -156,7 +156,7 @@ export default function CompanyManagePage() {
               </div>
               <button
                 onClick={handleSignOut}
-                className="bg-red-600 text-white px-3 py-1.5 rounded-md text-xs hover:bg-red-700 transition-colors"
+                className="bg-red-600 text-white px-4 py-2 rounded-md text-sm hover:bg-red-700 transition-colors"
               >
                 Sign Out
               </button>
@@ -192,7 +192,7 @@ export default function CompanyManagePage() {
               </button>
               <button
                 onClick={handleSignOut}
-                className="bg-red-600 text-white px-4 py-2 rounded-md text-sm hover:bg-red-700 transition-colors"
+                className="bg-red-600 text-white px-5 py-2.5 rounded-md text-sm hover:bg-red-700 transition-colors"
               >
                 Sign Out
               </button>
