@@ -163,12 +163,12 @@ export default function CompanyManagePage() {
             </div>
             <div className="flex flex-col space-y-2">
               <span className="text-xs text-gray-700 truncate">Welcome, {user?.email}</span>
-              <Link 
-                href="/dashboard" 
+              <button
+                onClick={() => window.location.href = '/dashboard'}
                 className="bg-gray-600 text-white px-3 py-1.5 rounded-md text-xs hover:bg-gray-700 transition-colors self-start w-fit"
               >
                 Back to Dashboard
-              </Link>
+              </button>
             </div>
           </div>
           
@@ -184,12 +184,12 @@ export default function CompanyManagePage() {
               <div className="flex flex-col items-end">
                 <span className="text-sm text-gray-700">Welcome, {user?.email}</span>
               </div>
-              <Link 
-                href="/dashboard" 
+              <button
+                onClick={() => window.location.href = '/dashboard'}
                 className="bg-gray-600 text-white px-4 py-2 rounded-md text-sm hover:bg-gray-700 transition-colors"
               >
                 Back to Dashboard
-              </Link>
+              </button>
               <button
                 onClick={handleSignOut}
                 className="bg-red-600 text-white px-4 py-2 rounded-md text-sm hover:bg-red-700 transition-colors"
