@@ -255,7 +255,7 @@ export default function AdminInvitePage() {
                     id="invitedEmail"
                     value={invitedEmail}
                     onChange={(e) => setInvitedEmail(e.target.value)}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-800"
                     placeholder="user@example.com"
                     required
                   />
@@ -270,7 +270,7 @@ export default function AdminInvitePage() {
                     id="companyName"
                     value={companyName}
                     onChange={(e) => setCompanyName(e.target.value)}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-800"
                     placeholder="Your Company Name"
                     required
                   />
@@ -285,7 +285,7 @@ export default function AdminInvitePage() {
                     rows={3}
                     value={personalMessage}
                     onChange={(e) => setPersonalMessage(e.target.value)}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-800"
                     placeholder="Add a personal message to the invitation..."
                   />
                 </div>
@@ -298,7 +298,7 @@ export default function AdminInvitePage() {
                     id="userRole"
                     value={userRole}
                     onChange={(e) => setUserRole(e.target.value)}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-800"
                     required
                   >
                     {getAvailableRoles(userRoles[0] || 'admin').map((role) => (

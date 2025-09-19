@@ -56,6 +56,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       email_confirm: true, // Auto-confirm email since they're accepting an invitation
       user_metadata: {
         company_name: invitation.company_name,
+        invited_email: invitation.invited_email,
         invited_via: 'admin_invitation',
         invitation_role: invitation.role,
         invitation_company_id: invitation.company_id
@@ -106,6 +107,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     console.log('Accept invite API: Profile created successfully')
 
+    // Create a session for the user
+    const { data: sessionData, error: sessionError } = await supabase.auth.admin.generateLink({
+      type: 'magiclink',
+      email: invitation.invited_email,
+      options: {
+        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/dashboard`
+      }
+    })
+
+    if (sessionError) {
+      console.error('Accept invite API: Error generating session link:', sessionError)
+      // Continue without session - user will need to log in manually
+    } else {
+      console.log('Accept invite API: Session link generated successfully')
+    }
+
     // Determine user roles and company status for session
     const roles = [invitation.role || 'user']
     const isAdmin = roles.includes('admin')
@@ -119,7 +136,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       userRoles: roles,
       isAdmin,
       isOwner,
-      hasCompany
+      hasCompany,
+      sessionLink: sessionData?.properties?.action_link
     })
 
   } catch (error) {

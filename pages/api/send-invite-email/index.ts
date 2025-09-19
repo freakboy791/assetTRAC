@@ -67,7 +67,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Generate unique invitation token
     const invitationToken = uuidv4()
     const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
-    const invitationLink = `${baseUrl}/invitation/${invitationToken}`
+    const invitationLink = `${baseUrl}/join/${invitationToken}`
     
     console.log('Generated invitation token:', invitationToken)
     console.log('Generated invitation link:', invitationLink)

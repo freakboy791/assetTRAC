@@ -60,6 +60,11 @@ export default function InviteAcceptPage() {
             console.log('Double-checking email state:', invitedEmail)
             setEmail(invitedEmail)
           }, 100)
+          // Force a third set after a longer delay
+          setTimeout(() => {
+            console.log('Triple-checking email state:', invitedEmail)
+            setEmail(invitedEmail)
+          }, 500)
         } else {
           console.error('No email found in invitation data')
           console.error('Full invitation data:', data.invitation)
@@ -243,7 +248,8 @@ export default function InviteAcceptPage() {
                   value={email || ''}
                   readOnly
                   disabled
-                  key={email} // Force re-render when email changes
+                  key={`email-${email}-${Date.now()}`} // Force re-render when email changes
+                  onChange={() => {}} // Prevent any changes
                 />
                 {email && (
                   <p className="mt-1 text-xs text-gray-500">

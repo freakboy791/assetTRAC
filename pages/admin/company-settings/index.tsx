@@ -14,8 +14,7 @@ export default function CompanySettingsPage() {
     state: '',
     zip: '',
     phone: '',
-    email: '',
-    depreciation_rate: 0
+    email: ''
   })
 
   useEffect(() => {
@@ -58,8 +57,7 @@ export default function CompanySettingsPage() {
           state: data.company.state || '',
           zip: data.company.zip || '',
           phone: data.company.phone || '',
-          email: data.company.email || '',
-          depreciation_rate: data.company.depreciation_rate || 0
+          email: data.company.email || ''
         })
       }
     } catch (error) {
@@ -241,22 +239,6 @@ export default function CompanySettingsPage() {
                   />
                 </div>
 
-                <div>
-                  <label htmlFor="depreciation_rate" className="block text-sm font-medium text-gray-700">
-                    Depreciation Rate (%)
-                  </label>
-                  <input
-                    type="number"
-                    name="depreciation_rate"
-                    id="depreciation_rate"
-                    value={companyData.depreciation_rate || ''}
-                    onChange={handleInputChange}
-                    min="0"
-                    max="100"
-                    step="0.01"
-                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  />
-                </div>
               </div>
 
               <div>

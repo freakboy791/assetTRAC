@@ -1,6 +1,60 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 
+// US States data for dropdown
+const US_STATES = [
+  { code: 'AL', name: 'Alabama' },
+  { code: 'AK', name: 'Alaska' },
+  { code: 'AZ', name: 'Arizona' },
+  { code: 'AR', name: 'Arkansas' },
+  { code: 'CA', name: 'California' },
+  { code: 'CO', name: 'Colorado' },
+  { code: 'CT', name: 'Connecticut' },
+  { code: 'DE', name: 'Delaware' },
+  { code: 'FL', name: 'Florida' },
+  { code: 'GA', name: 'Georgia' },
+  { code: 'HI', name: 'Hawaii' },
+  { code: 'ID', name: 'Idaho' },
+  { code: 'IL', name: 'Illinois' },
+  { code: 'IN', name: 'Indiana' },
+  { code: 'IA', name: 'Iowa' },
+  { code: 'KS', name: 'Kansas' },
+  { code: 'KY', name: 'Kentucky' },
+  { code: 'LA', name: 'Louisiana' },
+  { code: 'ME', name: 'Maine' },
+  { code: 'MD', name: 'Maryland' },
+  { code: 'MA', name: 'Massachusetts' },
+  { code: 'MI', name: 'Michigan' },
+  { code: 'MN', name: 'Minnesota' },
+  { code: 'MS', name: 'Mississippi' },
+  { code: 'MO', name: 'Missouri' },
+  { code: 'MT', name: 'Montana' },
+  { code: 'NE', name: 'Nebraska' },
+  { code: 'NV', name: 'Nevada' },
+  { code: 'NH', name: 'New Hampshire' },
+  { code: 'NJ', name: 'New Jersey' },
+  { code: 'NM', name: 'New Mexico' },
+  { code: 'NY', name: 'New York' },
+  { code: 'NC', name: 'North Carolina' },
+  { code: 'ND', name: 'North Dakota' },
+  { code: 'OH', name: 'Ohio' },
+  { code: 'OK', name: 'Oklahoma' },
+  { code: 'OR', name: 'Oregon' },
+  { code: 'PA', name: 'Pennsylvania' },
+  { code: 'RI', name: 'Rhode Island' },
+  { code: 'SC', name: 'South Carolina' },
+  { code: 'SD', name: 'South Dakota' },
+  { code: 'TN', name: 'Tennessee' },
+  { code: 'TX', name: 'Texas' },
+  { code: 'UT', name: 'Utah' },
+  { code: 'VT', name: 'Vermont' },
+  { code: 'VA', name: 'Virginia' },
+  { code: 'WA', name: 'Washington' },
+  { code: 'WV', name: 'West Virginia' },
+  { code: 'WI', name: 'Wisconsin' },
+  { code: 'WY', name: 'Wyoming' }
+]
+
 export default function CreateCompanyPage() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -9,12 +63,102 @@ export default function CreateCompanyPage() {
   const [isOwner, setIsOwner] = useState(false)
   const [userRoles, setUserRoles] = useState<string[]>([])
   const [companyName, setCompanyName] = useState('')
-  const [companyDescription, setCompanyDescription] = useState('')
-  const [companyWebsite, setCompanyWebsite] = useState('')
-  const [companyAddress, setCompanyAddress] = useState('')
+  const [companyStreet, setCompanyStreet] = useState('')
+  const [companyCity, setCompanyCity] = useState('')
+  const [companyState, setCompanyState] = useState('')
+  const [companyZip, setCompanyZip] = useState('')
   const [companyPhone, setCompanyPhone] = useState('')
   const [companyEmail, setCompanyEmail] = useState('')
+  const [depreciationRate, setDepreciationRate] = useState(7.5)
   const [hasCompany, setHasCompany] = useState(false)
+  const [stateError, setStateError] = useState('')
+  const [zipError, setZipError] = useState('')
+  const [phoneError, setPhoneError] = useState('')
+
+  // Validation functions
+  const validateState = (state: string) => {
+    if (!state) {
+      setStateError('State is required')
+      return false
+    }
+    if (state.length !== 2) {
+      setStateError('State must be a 2-letter code (e.g., CA, NY)')
+      return false
+    }
+    const validState = US_STATES.find(s => s.code === state.toUpperCase())
+    if (!validState) {
+      setStateError('Please enter a valid 2-letter state code')
+      return false
+    }
+    setStateError('')
+    return true
+  }
+
+  const validateZipCode = (zip: string) => {
+    if (!zip) {
+      setZipError('ZIP code is required')
+      return false
+    }
+    // US ZIP code pattern: exactly 5 digits
+    const zipPattern = /^\d{5}$/
+    if (!zipPattern.test(zip)) {
+      setZipError('Please enter a valid 5-digit ZIP code (e.g., 12345)')
+      return false
+    }
+    setZipError('')
+    return true
+  }
+
+  const handleStateChange = (value: string) => {
+    setCompanyState(value.toUpperCase())
+    validateState(value.toUpperCase())
+  }
+
+  const handleZipChange = (value: string) => {
+    // Only allow digits, limit to 5 digits
+    const digitsOnly = value.replace(/\D/g, '')
+    const limitedDigits = digitsOnly.slice(0, 5)
+    setCompanyZip(limitedDigits)
+    validateZipCode(limitedDigits)
+  }
+
+  const validatePhoneNumber = (phone: string) => {
+    if (!phone) {
+      setPhoneError('Phone number is required')
+      return false
+    }
+    // Remove all non-digit characters for validation
+    const digitsOnly = phone.replace(/\D/g, '')
+    if (digitsOnly.length !== 10) {
+      setPhoneError('Phone number must be 10 digits')
+      return false
+    }
+    setPhoneError('')
+    return true
+  }
+
+  const handlePhoneChange = (value: string) => {
+    // Remove all non-digit characters
+    const digitsOnly = value.replace(/\D/g, '')
+    
+    // Limit to 10 digits
+    const limitedDigits = digitsOnly.slice(0, 10)
+    
+    // Format as (xxx)-xxx-xxxx
+    let formatted = ''
+    if (limitedDigits.length > 0) {
+      if (limitedDigits.length <= 3) {
+        formatted = `(${limitedDigits}`
+      } else if (limitedDigits.length <= 6) {
+        formatted = `(${limitedDigits.slice(0, 3)})-${limitedDigits.slice(3)}`
+      } else {
+        formatted = `(${limitedDigits.slice(0, 3)})-${limitedDigits.slice(3, 6)}-${limitedDigits.slice(6)}`
+      }
+    }
+    
+    setCompanyPhone(formatted)
+    validatePhoneNumber(formatted)
+  }
 
   useEffect(() => {
     const checkUser = async () => {
@@ -34,11 +178,18 @@ export default function CreateCompanyPage() {
         
         // Check if user has invitation metadata
         const invitationData = session.user.user_metadata
+        console.log('User metadata:', invitationData)
+        
         if (invitationData?.company_name) {
+          console.log('Setting company name from metadata:', invitationData.company_name)
           setCompanyName(invitationData.company_name)
         }
         if (invitationData?.invited_email) {
+          console.log('Setting company email from metadata:', invitationData.invited_email)
           setCompanyEmail(invitationData.invited_email)
+        } else {
+          console.log('No invited_email found in metadata, using user email:', session.user.email)
+          setCompanyEmail(session.user.email)
         }
 
         // For now, set default values since we don't have the other APIs yet
@@ -63,34 +214,66 @@ export default function CreateCompanyPage() {
       return
     }
 
+    // Validate state, zip code, and phone number
+    const isStateValid = validateState(companyState)
+    const isZipValid = validateZipCode(companyZip)
+    const isPhoneValid = validatePhoneNumber(companyPhone)
+    
+    if (!isStateValid || !isZipValid || !isPhoneValid) {
+      setMessage('Please fix the validation errors below')
+      return
+    }
+
     setSubmitting(true)
     setMessage('')
 
     try {
+      // Get the user's access token for authentication
+      const { supabase: getSupabaseClient } = await import('../../lib/supabaseClient')
+      const supabase = getSupabaseClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (!session?.access_token) {
+        setMessage('Error: No valid session found. Please log in again.')
+        return
+      }
+
       const response = await fetch('/api/company/create', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
         },
         body: JSON.stringify({
           name: companyName,
-          description: companyDescription,
-          website: companyWebsite,
-          address: companyAddress,
+          street: companyStreet,
+          city: companyCity,
+          state: companyState,
+          zip: companyZip,
           phone: companyPhone,
-          email: companyEmail
+          email: companyEmail,
+          depreciation_rate: depreciationRate
         })
       })
 
       const result = await response.json()
+      console.log('Company creation response:', { status: response.status, result })
 
       if (response.ok) {
         setMessage('Company created successfully! Redirecting to dashboard...')
+        console.log('Company created successfully, redirecting in 2 seconds...')
+        
+        // Update session storage to reflect that user now has a company
+        sessionStorage.setItem('hasCompany', 'true')
+        console.log('Updated hasCompany flag in session storage')
+        
         setTimeout(() => {
+          console.log('Redirecting to dashboard...')
           window.location.href = '/dashboard'
         }, 2000)
       } else {
-        setMessage(`Error: ${result.message}`)
+        console.error('Company creation failed:', result)
+        setMessage(`Error: ${result.message || result.error || 'Failed to create company'}`)
       }
     } catch (error) {
       setMessage(`Error: ${error}`)
@@ -275,61 +458,108 @@ export default function CreateCompanyPage() {
                   />
                 </div>
 
-                <div>
-                  <label htmlFor="companyDescription" className="block text-sm font-medium text-gray-700">
-                    Description
-                  </label>
-                  <textarea
-                    id="companyDescription"
-                    rows={3}
-                    value={companyDescription}
-                    onChange={(e) => setCompanyDescription(e.target.value)}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                    placeholder="Brief description of your company..."
-                  />
-                </div>
 
                 <div>
-                  <label htmlFor="companyWebsite" className="block text-sm font-medium text-gray-700">
-                    Website
-                  </label>
-                  <input
-                    type="url"
-                    id="companyWebsite"
-                    value={companyWebsite}
-                    onChange={(e) => setCompanyWebsite(e.target.value)}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                    placeholder="https://yourcompany.com"
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="companyAddress" className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-gray-700 mb-3">
                     Address
                   </label>
-                  <textarea
-                    id="companyAddress"
-                    rows={2}
-                    value={companyAddress}
-                    onChange={(e) => setCompanyAddress(e.target.value)}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                    placeholder="Company address..."
-                  />
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label htmlFor="companyStreet" className="block text-sm font-medium text-gray-600">
+                        Street Address
+                      </label>
+                      <input
+                        type="text"
+                        id="companyStreet"
+                        value={companyStreet}
+                        onChange={(e) => setCompanyStreet(e.target.value)}
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-800"
+                        placeholder="123 Main Street"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label htmlFor="companyCity" className="block text-sm font-medium text-gray-600">
+                          City
+                        </label>
+                        <input
+                          type="text"
+                          id="companyCity"
+                          value={companyCity}
+                          onChange={(e) => setCompanyCity(e.target.value)}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-800"
+                          placeholder="New York"
+                        />
+                      </div>
+
+                      <div>
+                        <label htmlFor="companyState" className="block text-sm font-medium text-gray-600">
+                          State *
+                        </label>
+                        <select
+                          id="companyState"
+                          value={companyState}
+                          onChange={(e) => handleStateChange(e.target.value)}
+                          className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-800 ${
+                            stateError ? 'border-red-300' : 'border-gray-300'
+                          }`}
+                        >
+                          <option value="">Select a state</option>
+                          {US_STATES.map((state) => (
+                            <option key={state.code} value={state.code}>
+                              {state.code} - {state.name}
+                            </option>
+                          ))}
+                        </select>
+                        {stateError && (
+                          <p className="mt-1 text-sm text-red-600">{stateError}</p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label htmlFor="companyZip" className="block text-sm font-medium text-gray-600">
+                          ZIP Code *
+                        </label>
+                        <input
+                          type="text"
+                          id="companyZip"
+                          value={companyZip}
+                          onChange={(e) => handleZipChange(e.target.value)}
+                          className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-800 ${
+                            zipError ? 'border-red-300' : 'border-gray-300'
+                          }`}
+                          placeholder="12345"
+                          maxLength={5}
+                        />
+                        {zipError && (
+                          <p className="mt-1 text-sm text-red-600">{zipError}</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div>
                     <label htmlFor="companyPhone" className="block text-sm font-medium text-gray-700">
-                      Phone
+                      Phone *
                     </label>
                     <input
                       type="tel"
                       id="companyPhone"
                       value={companyPhone}
-                      onChange={(e) => setCompanyPhone(e.target.value)}
-                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                      placeholder="+1 (555) 123-4567"
+                      onChange={(e) => handlePhoneChange(e.target.value)}
+                      className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-800 ${
+                        phoneError ? 'border-red-300' : 'border-gray-300'
+                      }`}
+                      placeholder="(555) 123-4567"
+                      maxLength={14}
                     />
+                    {phoneError && (
+                      <p className="mt-1 text-sm text-red-600">{phoneError}</p>
+                    )}
                   </div>
 
                   <div>
@@ -347,6 +577,23 @@ export default function CreateCompanyPage() {
                       placeholder="contact@yourcompany.com"
                       readOnly={!!user?.user_metadata?.invited_email}
                       disabled={!!user?.user_metadata?.invited_email}
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="depreciationRate" className="block text-sm font-medium text-gray-700">
+                      Depreciation Rate (%)
+                    </label>
+                    <input
+                      type="number"
+                      id="depreciationRate"
+                      value={depreciationRate}
+                      onChange={(e) => setDepreciationRate(parseFloat(e.target.value) || 0)}
+                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-800"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      placeholder="7.5"
                     />
                   </div>
                 </div>

@@ -63,11 +63,28 @@ export default function DashboardPage() {
         setIsOwner(isOwnerRole)
         setHasCompany(hasCompanyData)
 
-        // If owner but no company, redirect to company creation
+        // If owner but no company, check database to be sure
         if (isOwnerRole && !hasCompanyData) {
-          console.log('Dashboard: Owner with no company, redirecting to company creation')
-          window.location.href = '/company/create'
-          return
+          console.log('Dashboard: Owner with no company in session storage, checking database...')
+          
+          // Check if user actually has a company in the database
+          const { data: companyUsers, error: companyError } = await supabase
+            .from('company_users')
+            .select('company_id')
+            .eq('user_id', session.user.id)
+            .limit(1)
+          
+          if (companyError) {
+            console.error('Dashboard: Error checking company association:', companyError)
+          } else if (companyUsers && companyUsers.length > 0) {
+            console.log('Dashboard: User has company in database, updating session storage')
+            sessionStorage.setItem('hasCompany', 'true')
+            setHasCompany(true)
+          } else {
+            console.log('Dashboard: Owner with no company, redirecting to company creation')
+            window.location.href = '/company/create'
+            return
+          }
         }
 
         // Load invitations if user is admin
@@ -349,7 +366,7 @@ export default function DashboardPage() {
                   </div>
                   <div className="mt-4">
                     <button
-                      onClick={() => window.location.href = '/admin/company-settings'}
+                      onClick={() => window.location.href = '/company/manage'}
                       className="w-full bg-blue-600 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-700 transition-colors"
                     >
                       Manage Company

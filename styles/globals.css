@@ -28,3 +28,21 @@ body {
     text-wrap: balance;
   }
 }
+
+/* Ensure all input fields have visible text on all devices */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="tel"],
+input[type="url"],
+input[type="number"],
+textarea,
+select {
+  color: #1f2937 !important; /* text-gray-800 */
+}
+
+/* Ensure input placeholders are visible but subtle */
+input::placeholder,
+textarea::placeholder {
+  color: #6b7280 !important; /* text-gray-500 */
+}

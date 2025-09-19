@@ -140,17 +140,36 @@ export default function HomePage() {
             const { supabase: getSupabaseClient } = await import('../lib/supabaseClient')
             const supabase = getSupabaseClient()
             
+            console.log('About to make API call to /api/auth/signin')
+            console.log('Request body:', { email, password: '***' })
+            
             // Use our custom API instead of direct Supabase call
-            const response = await fetch('/api/auth/signin', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({ email, password }),
-            })
-
-            const result = await response.json()
-            console.log('Login response:', { ok: response.ok, status: response.status, result })
+            let response
+            try {
+              response = await fetch('/api/auth/signin', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ email, password }),
+              })
+              console.log('API call completed, response status:', response.status)
+              console.log('Response ok:', response.ok)
+            } catch (fetchError) {
+              console.error('Fetch error:', fetchError)
+              setMessage(`Network error: ${fetchError.message}. Please check your connection and try again.`)
+              return
+            }
+            
+            let result
+            try {
+              result = await response.json()
+              console.log('Login response:', { ok: response.ok, status: response.status, result })
+            } catch (jsonError) {
+              console.error('JSON parse error:', jsonError)
+              setMessage(`Server error: Unable to parse response. Please try again.`)
+              return
+            }
 
             // Convert API response to match expected format
             const data = result.user ? { user: result.user, session: result.session } : null
@@ -209,9 +228,14 @@ export default function HomePage() {
               return
             }
           } catch (authError) {
-            console.log('Error checking Supabase Auth:', authError)
+            console.error('Error checking Supabase Auth:', authError)
+            console.error('Auth error details:', {
+              name: authError.name,
+              message: authError.message,
+              stack: authError.stack
+            })
             setAccountExists(false)
-            setMessage('No account exists for this email address. Please contact your manager or the assetTRAC Admin to request an invitation.')
+            setMessage(`Authentication error: ${authError.message}. Please contact your manager or the assetTRAC Admin to request an invitation.`)
             return
           }
         }
@@ -271,7 +295,13 @@ export default function HomePage() {
         setMessage('Unable to verify account. Please contact your manager or the assetTRAC Admin to request an invitation.')
       }
     } catch (error) {
-      setMessage(`Unexpected error: ${error}`)
+      console.error('Unexpected error in handleLogIn:', error)
+      console.error('Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      })
+      setMessage(`Unexpected error: ${error.message || error}. Please try again or contact support if the problem persists.`)
     } finally {
       setLoading(false)
     }
