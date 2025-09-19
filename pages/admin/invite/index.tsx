@@ -207,7 +207,34 @@ export default function AdminInvitePage() {
             </ol>
           </nav>
 
-          <div className="flex justify-between items-center py-6">
+          {/* Mobile Layout */}
+          <div className="block sm:hidden py-4">
+            <div className="flex justify-between items-center mb-3">
+              <div className="flex items-center">
+                <div className="h-6 w-6 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full flex items-center justify-center mr-2">
+                  <span className="text-xs font-bold text-white">AT</span>
+                </div>
+                <h1 className="text-lg font-bold text-gray-900">assetTRAC Admin</h1>
+              </div>
+              <button
+                onClick={handleSignOut}
+                className="bg-red-600 text-white px-3 py-1.5 rounded-md text-xs hover:bg-red-700 transition-colors"
+              >
+                Sign Out
+              </button>
+            </div>
+            <div className="flex flex-col space-y-2">
+              <button
+                onClick={() => window.location.href = '/dashboard'}
+                className="bg-gray-600 text-white px-3 py-1.5 rounded-md text-xs hover:bg-gray-700 transition-colors self-start"
+              >
+                Back to Dashboard
+              </button>
+            </div>
+          </div>
+          
+          {/* Desktop Layout */}
+          <div className="hidden sm:flex justify-between items-center py-6">
             <div className="flex items-center">
               <div className="h-8 w-8 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full flex items-center justify-center mr-3">
                 <span className="text-sm font-bold text-white">AT</span>

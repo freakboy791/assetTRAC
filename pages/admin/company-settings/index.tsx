@@ -147,7 +147,35 @@ export default function CompanySettingsPage() {
             </ol>
           </nav>
 
-          <div className="flex justify-between items-center">
+          {/* Mobile Layout */}
+          <div className="block sm:hidden py-4">
+            <div className="mb-4">
+              <h1 className="text-xl font-bold text-gray-900">Company Settings</h1>
+              <p className="mt-1 text-xs text-gray-500">Manage your company information and settings</p>
+            </div>
+            <div className="flex flex-col space-y-2">
+              <button
+                onClick={() => window.location.href = '/dashboard'}
+                className="bg-gray-600 text-white px-3 py-1.5 rounded-md text-xs hover:bg-gray-700 transition-colors self-start"
+              >
+                Back to Dashboard
+              </button>
+              <button
+                onClick={() => {
+                  const { supabase: getSupabaseClient } = require('../../../lib/supabaseClient')
+                  const supabase = getSupabaseClient()
+                  supabase.auth.signOut()
+                  window.location.href = '/'
+                }}
+                className="bg-red-600 text-white px-3 py-1.5 rounded-md text-xs hover:bg-red-700 transition-colors self-start"
+              >
+                Sign Out
+              </button>
+            </div>
+          </div>
+          
+          {/* Desktop Layout */}
+          <div className="hidden sm:flex justify-between items-center">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Company Settings</h1>
               <p className="mt-1 text-sm text-gray-500">Manage your company information and settings</p>

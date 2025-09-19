@@ -261,7 +261,50 @@ export default function DashboardPage() {
       {/* Header */}
       <header className="bg-white shadow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
+          {/* Mobile Layout */}
+          <div className="block sm:hidden py-4">
+            <div className="flex justify-between items-center mb-3">
+              <div className="flex items-center">
+                <div className="h-6 w-6 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full flex items-center justify-center mr-2">
+                  <span className="text-xs font-bold text-white">AT</span>
+                </div>
+                <h1 className="text-lg font-bold text-gray-900">assetTRAC</h1>
+              </div>
+              <button
+                onClick={handleSignOut}
+                className="bg-red-600 text-white px-3 py-1.5 rounded-md text-xs hover:bg-red-700 transition-colors"
+              >
+                Sign Out
+              </button>
+            </div>
+            <div className="flex flex-col space-y-2">
+              <span className="text-xs text-gray-700 truncate">Welcome, {user?.email}</span>
+              {userRoles.length > 0 && (
+                <div className="flex items-center space-x-2">
+                  <span className="text-xs text-gray-500">Role:</span>
+                  <div className="flex flex-wrap gap-1">
+                    {userRoles.map((role, index) => (
+                      <span
+                        key={index}
+                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                          role === 'admin' 
+                            ? 'bg-purple-100 text-purple-800' 
+                            : role === 'owner'
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-blue-100 text-blue-800'
+                        }`}
+                      >
+                        {role.charAt(0).toUpperCase() + role.slice(1)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+          
+          {/* Desktop Layout */}
+          <div className="hidden sm:flex justify-between items-center py-6">
             <div className="flex items-center">
               <div className="h-8 w-8 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full flex items-center justify-center mr-3">
                 <span className="text-sm font-bold text-white">AT</span>
