@@ -7,6 +7,14 @@ assetTRAC is a comprehensive asset management system designed for Small and Medi
 **Repository**: GitHub assetTRAC  
 **Current Status**: Development phase with core authentication and invitation system implemented
 
+## ⚠️ IMPORTANT: Project Cleanliness
+**DO NOT** add test files, debug files, or temporary folders to this project. All test files should be:
+- Created outside the project directory
+- Deleted immediately after testing
+- Never committed to version control
+
+This project should maintain a clean, production-ready structure at all times.
+
 ## Technology Stack
 - **Frontend**: Next.js 13+ with TypeScript
 - **Backend**: Next.js API Routes
@@ -34,36 +42,192 @@ assetTRAC is a comprehensive asset management system designed for Small and Medi
   - Invite users with any role
   - Full access to all company data
   - Manage company settings
+  - **Asset Management**: Full create, read, update, delete access
+  - **Financials Management**: Full create, read, update, delete access
 - **Redirect Flow**: After account creation → `/company/create`
 - **Approval Chain**: Approves Managers
 
 ### 3. Manager (Per-Company)
-- **Description**: Company manager with asset management privileges
+- **Description**: Company manager with configurable access levels
+- **Sub-Roles**:
+  - **Manager - Asset**: Full asset management (create, read, update, delete) + management permissions
+  - **Manager - Financials**: Full financials management (create, read, update, delete) + management permissions  
+  - **Manager - Both**: Full asset and financials management + management permissions
 - **Permissions**:
   - Approve Tech and Viewer roles
-  - Manage company assets
+  - **Asset Management** (based on sub-role): Full CRUD operations on assets
+  - **Financials Management** (based on sub-role): Full CRUD operations on financial data
   - Send user invitations
   - View and manage company users
 - **Redirect Flow**: After account creation → `/dashboard`
 - **Approval Chain**: Approves Tech/Viewers
 
 ### 4. Tech (Per-Company)
-- **Description**: Technical user with asset management access
+- **Description**: Technical user with asset management access only
 - **Permissions**:
-  - Full asset CRUD operations
+  - **Asset Management**: Full create, read, update, delete access
   - Asset assignments
   - Technical asset management
+  - **Financials**: No access
 - **Redirect Flow**: After account creation → `/dashboard`
-- **Scope**: Asset-only access
+- **Scope**: Asset-only access (no financials)
 
 ### 5. Viewer (Per-Company)
-- **Description**: Read-only user with configurable access
+- **Description**: Read-only user with configurable access levels
+- **Sub-Roles**:
+  - **Viewer - Asset**: Read-only access to asset information only (no create, update, delete)
+  - **Viewer - Financials**: Read-only access to financial data only (no create, update, delete)
+  - **Viewer - Both**: Read-only access to both asset and financial data (no create, update, delete)
 - **Permissions**:
-  - Asset view (configurable)
-  - Financials view (configurable)
+  - **Asset Access** (based on sub-role): Read-only (view only, no modifications)
+  - **Financials Access** (based on sub-role): Read-only (view only, no modifications)
   - Read-only access to assigned data
 - **Redirect Flow**: After account creation → `/dashboard`
-- **Scope**: Read-only access
+- **Scope**: Read-only access (no management capabilities)
+
+## Role-Based Access Control (RBAC) Implementation
+
+### Dashboard Access Control
+
+#### Company Management Tile Visibility
+- **Visible to**: Admin, Owner, Manager
+- **Hidden from**: Tech, Viewer
+- **Location**: Dashboard quick actions grid
+- **Function**: Provides access to company settings and management
+
+#### Company Information Recap
+- **Visible to**: Tech, Viewer
+- **Hidden from**: Admin, Owner, Manager (they have full management access)
+- **Location**: Top of dashboard, above quick actions
+- **Content**: Read-only display of company name, email, phone, and address
+
+### Company Management Page Access Control
+
+#### Edit Permissions
+- **Can Edit**: Admin, Owner, Manager
+- **Read-Only**: Tech, Viewer
+- **Implementation**: Edit button appears only for users with edit permissions
+
+#### Form Field States
+- **Edit Mode**: Fields are enabled and editable
+- **View Mode**: Fields are disabled and read-only
+- **Toggle**: Users with edit permissions can switch between modes
+
+#### Action Buttons
+- **Edit Button**: Only visible to Admin, Owner, Manager
+- **Save Button**: Only visible when in edit mode and user has edit permissions
+- **Back to Dashboard**: Always visible
+
+### Invitation System Access Control
+
+#### Send Invitation Tile Visibility
+- **Visible to**: Admin, Owner, Manager
+- **Hidden from**: Tech, Viewer
+- **Location**: Dashboard quick actions grid
+- **Function**: Provides access to send user invitations
+
+#### Invitation Page Access
+- **Can Access**: Admin, Owner, Manager
+- **Cannot Access**: Tech, Viewer (redirected to dashboard with error message)
+- **URL**: `/admin/invite`
+
+#### Role-Based Invitation Permissions
+
+| Inviter Role | Can Invite | Cannot Invite |
+|--------------|------------|---------------|
+| **Admin** | Owner, Manager-*, Tech, Viewer-* | Admin |
+| **Owner** | Owner, Manager-*, Tech, Viewer-* | Admin |
+| **Manager-*** | Tech, Viewer-* | Admin, Owner, Manager-* |
+| **Tech** | None | All roles (no access) |
+| **Viewer-*** | None | All roles (no access) |
+
+#### Role Dropdown Options
+- **Admin/Owner**: All roles except Admin (including all sub-roles)
+- **Manager-***: Only Tech and Viewer sub-roles
+- **Tech/Viewer-***: No access to invitation system
+
+#### Sub-Role Definitions
+- **Manager-***: Any manager sub-role (manager-asset, manager-financials, manager-both)
+- **Viewer-***: Any viewer sub-role (viewer-asset, viewer-financials, viewer-both)
+
+### Permission Matrix
+
+| Feature | Admin | Owner | Manager-* | Tech | Viewer-* |
+|---------|-------|-------|-----------|------|----------|
+| **Dashboard Company Management Tile** | ✅ | ✅ | ✅ | ❌ | ❌ |
+| **Dashboard Company Recap** | ❌ | ❌ | ❌ | ✅ | ✅ |
+| **Company Management Page Access** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Edit Company Information** | ✅ | ✅ | ✅ | ❌ | ❌ |
+| **View Company Information** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Depreciation Rate Management** | ✅ | ✅ | ❌ | ❌ | ❌ |
+| **Send Invitation Tile** | ✅ | ✅ | ✅ | ❌ | ❌ |
+| **Send Invitation Page Access** | ✅ | ✅ | ✅ | ❌ | ❌ |
+| **Invite Owner Role** | ✅ | ✅ | ❌ | ❌ | ❌ |
+| **Invite Manager-* Role** | ✅ | ✅ | ❌ | ❌ | ❌ |
+| **Invite Tech Role** | ✅ | ✅ | ✅ | ❌ | ❌ |
+| **Invite Viewer-* Role** | ✅ | ✅ | ✅ | ❌ | ❌ |
+| **Asset Management Access** | ✅ | ✅ | Based on sub-role | ✅ | Based on sub-role |
+| **Financials Access** | ✅ | ✅ | Based on sub-role | ❌ | Based on sub-role |
+| **Asset View Access** | ✅ | ✅ | Based on sub-role | ✅ | Based on sub-role |
+| **Financials View Access** | ✅ | ✅ | Based on sub-role | ❌ | Based on sub-role |
+
+### Sub-Role Access Matrix
+
+| Role | Asset Access | Financials Access | Management Permissions |
+|------|--------------|-------------------|----------------------|
+| **Admin** | ✅ Full CRUD | ✅ Full CRUD | ✅ Full |
+| **Owner** | ✅ Full CRUD | ✅ Full CRUD | ✅ Full |
+| **Manager-Asset** | ✅ Full CRUD | ❌ None | ✅ Full |
+| **Manager-Financials** | ❌ None | ✅ Full CRUD | ✅ Full |
+| **Manager-Both** | ✅ Full CRUD | ✅ Full CRUD | ✅ Full |
+| **Tech** | ✅ Full CRUD | ❌ None | ❌ None |
+| **Viewer-Asset** | ✅ Read-only | ❌ None | ❌ None |
+| **Viewer-Financials** | ❌ None | ✅ Read-only | ❌ None |
+| **Viewer-Both** | ✅ Read-only | ✅ Read-only | ❌ None |
+
+### Permission Clarifications
+
+#### Management vs View Permissions
+- **Management Access**: Can create, read, update, and delete data
+- **View Access**: Can only read/view data (no create, update, delete)
+
+#### Asset Access
+- **Full CRUD**: Create, read, update, delete assets
+- **Read-only**: View asset information only
+
+#### Financials Access  
+- **Full CRUD**: Create, read, update, delete financial data
+- **Read-only**: View financial reports and data only
+
+### Implementation Details
+
+#### Helper Functions
+```typescript
+// Check if user can manage company (admin, owner, manager)
+const canManageCompany = () => {
+  return userRoles.includes('admin') || userRoles.includes('owner') || userRoles.includes('manager')
+}
+
+// Check if user should see company recap (tech, viewer)
+const shouldShowCompanyRecap = () => {
+  return userRoles.includes('viewer') || userRoles.includes('tech')
+}
+
+// Check if user can edit company
+const canEditCompany = () => {
+  return isAdmin || isOwner || isManager
+}
+```
+
+#### Role Storage
+- **Session Storage**: `userRoles` array, `isAdmin`, `isOwner` flags
+- **User Metadata**: Fallback role information in Supabase user metadata
+- **Database**: Role information stored in `company_users` table
+
+#### UI State Management
+- **Edit Mode Toggle**: `isEditing` state controls form field states
+- **Role-Based Rendering**: Conditional rendering based on user roles
+- **Dynamic Styling**: Form fields styled differently based on edit permissions
 
 ## Database Schema (Current Implementation)
 

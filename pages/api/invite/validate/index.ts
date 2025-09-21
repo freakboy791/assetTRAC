@@ -18,8 +18,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
 
-    console.log('Validate invite API: Looking for token:', token)
-
     // Find the invitation by token
     const { data: invitation, error } = await supabase
       .from('invites')
@@ -28,7 +26,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .single()
 
     if (error || !invitation) {
-      console.log('Validate invite API: Invitation not found:', error)
       return res.status(404).json({ message: 'Invitation not found or expired' })
     }
 
@@ -43,12 +40,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Check if invitation is already used
     if (invitation.status !== 'pending') {
-      console.log('Validate invite API: Invitation already used, status:', invitation.status)
       return res.status(400).json({ message: 'Invitation has already been used' })
     }
-
-    console.log('Validate invite API: Invitation found and valid:', invitation.invited_email)
-    console.log('Validate invite API: Full invitation data:', invitation)
 
     // Return the invitation data
     const responseData = {
@@ -66,7 +59,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
     
-    console.log('Validate invite API: Sending response:', responseData)
     res.status(200).json(responseData)
 
   } catch (error) {

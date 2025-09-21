@@ -11,6 +11,7 @@ export default function DashboardPage() {
   const [userRoles, setUserRoles] = useState<string[]>([])
   const [invitations, setInvitations] = useState<Invitation[]>([])
   const [invitationsLoading, setInvitationsLoading] = useState(false)
+  const [companyData, setCompanyData] = useState<any>(null)
 
   useEffect(() => {
     const checkUser = async () => {
@@ -32,6 +33,38 @@ export default function DashboardPage() {
 
         console.log('Dashboard: User found:', session.user.email)
         setUser(session.user)
+
+        // Check if user is approved by admin
+        try {
+          const approvalResponse = await fetch('/api/auth/getUser', {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${session.access_token}`
+            }
+          })
+          
+          const approvalData = await approvalResponse.json()
+          console.log('Dashboard: Admin approval check result:', approvalData)
+          
+          // Allow admins to bypass approval check
+          if (!approvalData.isApproved && !approvalData.isAdmin) {
+            console.log('Dashboard: User not approved and not admin, redirecting to login')
+            // Sign out the user
+            await supabase.auth.signOut()
+            sessionStorage.clear()
+            localStorage.clear()
+            window.location.href = '/auth?message=Your account is waiting for admin approval. Please contact your administrator to approve your account.'
+            return
+          }
+        } catch (approvalError) {
+          console.error('Dashboard: Error checking admin approval:', approvalError)
+          // If we can't check approval, assume not approved for safety
+          await supabase.auth.signOut()
+          sessionStorage.clear()
+          localStorage.clear()
+          window.location.href = '/auth?message=Your account is waiting for admin approval. Please contact your administrator to approve your account.'
+          return
+        }
 
         // Get role information from session storage (set during login)
         const storedRoles = sessionStorage.getItem('userRoles')
@@ -93,6 +126,12 @@ export default function DashboardPage() {
           await loadInvitations()
         }
 
+        // Load company data for viewer/tech roles to show company recap
+        if (hasCompanyData && (roles.includes('viewer') || roles.includes('tech'))) {
+          console.log('Dashboard: Loading company data for viewer/tech role...')
+          await loadCompanyData()
+        }
+
         console.log('Dashboard: Setting loading to false')
         setLoading(false)
       } catch (error) {
@@ -116,6 +155,19 @@ export default function DashboardPage() {
       console.error('Error signing out:', error)
       // Still redirect even if signout fails
       window.location.href = '/'
+    }
+  }
+
+  const loadCompanyData = async () => {
+    try {
+      const response = await fetch('/api/company/get')
+      const data = await response.json()
+      
+      if (data.company) {
+        setCompanyData(data.company)
+      }
+    } catch (error) {
+      console.error('Error loading company data:', error)
     }
   }
 
@@ -245,6 +297,16 @@ export default function DashboardPage() {
     }
   }
 
+  // Helper function to check if user can manage company
+  const canManageCompany = () => {
+    return userRoles.includes('admin') || userRoles.includes('owner') || userRoles.some(role => role.startsWith('manager'))
+  }
+
+  // Helper function to check if user should see company recap
+  const shouldShowCompanyRecap = () => {
+    return userRoles.some(role => role.startsWith('viewer')) || userRoles.includes('tech')
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -291,10 +353,19 @@ export default function DashboardPage() {
                             ? 'bg-purple-100 text-purple-800' 
                             : role === 'owner'
                             ? 'bg-green-100 text-green-800'
+                            : role.startsWith('manager')
+                            ? 'bg-orange-100 text-orange-800'
+                            : role === 'tech'
+                            ? 'bg-blue-100 text-blue-800'
+                            : role.startsWith('viewer')
+                            ? 'bg-gray-100 text-gray-800'
                             : 'bg-blue-100 text-blue-800'
                         }`}
                       >
-                        {role.charAt(0).toUpperCase() + role.slice(1)}
+                        {role.includes('-') 
+                          ? role.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
+                          : role.charAt(0).toUpperCase() + role.slice(1)
+                        }
                       </span>
                     ))}
                   </div>
@@ -326,10 +397,19 @@ export default function DashboardPage() {
                               ? 'bg-purple-100 text-purple-800' 
                               : role === 'owner'
                               ? 'bg-green-100 text-green-800'
+                              : role.startsWith('manager')
+                              ? 'bg-orange-100 text-orange-800'
+                              : role === 'tech'
+                              ? 'bg-blue-100 text-blue-800'
+                              : role.startsWith('viewer')
+                              ? 'bg-gray-100 text-gray-800'
                               : 'bg-blue-100 text-blue-800'
                           }`}
                         >
-                          {role.charAt(0).toUpperCase() + role.slice(1)}
+                          {role.includes('-') 
+                            ? role.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
+                            : role.charAt(0).toUpperCase() + role.slice(1)
+                          }
                         </span>
                       ))}
                     </div>
@@ -355,43 +435,77 @@ export default function DashboardPage() {
             <p className="mt-2 text-gray-600">Welcome to your assetTRAC dashboard</p>
           </div>
 
-          {/* Quick Actions */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-            {/* Admin Actions */}
-            {isAdmin && (
-              <>
-
-                <div className="bg-white overflow-hidden shadow rounded-lg">
-                  <div className="p-6">
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0">
-                        <div className="w-8 h-8 bg-green-100 rounded-md flex items-center justify-center">
-                          <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                          </svg>
-                        </div>
-                      </div>
-                      <div className="ml-4">
-                        <h3 className="text-lg font-medium text-gray-900">Send Invitation</h3>
-                        <p className="text-sm text-gray-500">Invite new users to your organization</p>
-                      </div>
+          {/* Company Recap for Viewer/Tech Roles */}
+          {shouldShowCompanyRecap() && companyData && (
+            <div className="mb-8">
+              <div className="bg-white shadow rounded-lg">
+                <div className="px-6 py-4 border-b border-gray-200">
+                  <h3 className="text-lg font-medium text-gray-900">Company Information</h3>
+                </div>
+                <div className="px-6 py-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-500">Company Name</h4>
+                      <p className="mt-1 text-sm text-gray-900">{companyData.name}</p>
                     </div>
-                    <div className="mt-4">
-                      <button
-                        onClick={() => window.location.href = '/admin/invite'}
-                        className="w-full bg-green-600 text-white px-4 py-2 rounded-md text-sm hover:bg-green-700 transition-colors"
-                      >
-                        Send New Invitation
-                      </button>
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-500">Email</h4>
+                      <p className="mt-1 text-sm text-gray-900">{companyData.email}</p>
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-500">Phone</h4>
+                      <p className="mt-1 text-sm text-gray-900">{companyData.phone}</p>
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-500">Address</h4>
+                      <p className="mt-1 text-sm text-gray-900">
+                        {companyData.street && (
+                          <span>{companyData.street}<br /></span>
+                        )}
+                        {companyData.city && companyData.state && companyData.zip && (
+                          <span>{companyData.city}, {companyData.state} {companyData.zip}</span>
+                        )}
+                      </p>
                     </div>
                   </div>
                 </div>
+              </div>
+            </div>
+          )}
 
-              </>
+          {/* Quick Actions */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+            {/* Admin/Owner/Manager Actions - Send Invitation */}
+            {(isAdmin || isOwner || userRoles.some(role => role.startsWith('manager'))) && (
+              <div className="bg-white overflow-hidden shadow rounded-lg">
+                <div className="p-6">
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0">
+                      <div className="w-8 h-8 bg-green-100 rounded-md flex items-center justify-center">
+                        <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                      </div>
+                    </div>
+                    <div className="ml-4">
+                      <h3 className="text-lg font-medium text-gray-900">Send Invitation</h3>
+                      <p className="text-sm text-gray-500">Invite new users to your organization</p>
+                    </div>
+                  </div>
+                  <div className="mt-4">
+                    <button
+                      onClick={() => window.location.href = '/admin/invite'}
+                      className="w-full bg-green-600 text-white px-4 py-2 rounded-md text-sm hover:bg-green-700 transition-colors"
+                    >
+                      Send New Invitation
+                    </button>
+                  </div>
+                </div>
+              </div>
             )}
 
-            {/* Company Actions */}
-            {hasCompany && (
+            {/* Company Actions - Only for admin/owner/manager roles */}
+            {hasCompany && canManageCompany() && (
               <div className="bg-white overflow-hidden shadow rounded-lg">
                 <div className="p-6">
                   <div className="flex items-center">

@@ -19,6 +19,9 @@ export default function JoinPage() {
   const [message, setMessage] = useState('')
   const emailInputRef = useRef<HTMLInputElement>(null)
 
+  // Debug: Log when component mounts
+  console.log('JoinPage mounted - URL:', typeof window !== 'undefined' ? window.location.href : 'SSR')
+
   useEffect(() => {
     const fetchInvitation = async () => {
       try {
@@ -42,29 +45,9 @@ export default function JoinPage() {
         const data = await response.json()
         
         if (data.invitation) {
-          console.log('Invitation data received:', data.invitation)
           setInvitation(data.invitation)
-          
-          const invitedEmail = data.invitation.invited_email || data.invitation.email
-          console.log('Extracted email:', invitedEmail)
-          
-          if (invitedEmail) {
-            console.log('Setting email to:', invitedEmail)
-            setEmail(invitedEmail)
-            
-            // Force set the input value immediately
-            setTimeout(() => {
-              if (emailInputRef.current) {
-                console.log('Force setting input value to:', invitedEmail)
-                emailInputRef.current.value = invitedEmail
-                emailInputRef.current.setAttribute('value', invitedEmail)
-              }
-            }, 100)
-          } else {
-            console.log('No email found in invitation data')
-          }
+          setEmail(data.invitation.invited_email)
         } else {
-          console.log('No invitation data in response')
           setError('Invalid invitation')
         }
         
@@ -79,14 +62,6 @@ export default function JoinPage() {
     fetchInvitation()
   }, [])
 
-  // Debug email state changes and force input value
-  useEffect(() => {
-    console.log('Email state changed to:', email)
-    if (email && emailInputRef.current) {
-      console.log('Setting input value to:', email)
-      emailInputRef.current.value = email
-    }
-  }, [email])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -215,111 +190,107 @@ export default function JoinPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Create Your Account
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            You've been invited to join {invitation?.company_name}
-          </p>
+        {/* Logo */}
+        <div className="text-center">
+          <div className="mx-auto h-16 w-16 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full flex items-center justify-center mb-4">
+            <span className="text-2xl font-bold text-white">AT</span>
+          </div>
+          <h1 className="text-3xl font-extrabold text-gray-900 bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+            assetTRAC
+          </h1>
+          <p className="mt-2 text-sm text-gray-600">Asset Tracking & Management</p>
         </div>
+
+        <div className="bg-white py-8 px-6 shadow rounded-lg sm:px-10">
+          <div className="mb-6">
+            <h2 className="text-center text-2xl font-bold text-gray-900">
+              Complete Your Registration
+            </h2>
+            <p className="mt-2 text-center text-sm text-gray-600">
+              Welcome to assetTRAC! You've been invited by {invitation?.company_name} Please set up your password to complete your account.
+            </p>
+          </div>
         
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div className="space-y-4">
-            {/* Debug Panel */}
-            {email && (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
-                <p className="text-sm text-yellow-800">
-                  <strong>Debug:</strong> Email loaded: {email}
-                </p>
+          <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="email" className="sr-only">
+                  Email address
+                </label>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  className={`appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm ${
+                    email 
+                      ? 'bg-gray-100 cursor-not-allowed' 
+                      : ''
+                  }`}
+                  placeholder="Email address"
+                  value={email || ''}
+                  readOnly={!!email}
+                  disabled={!!email}
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="password" className="sr-only">
+                  Password
+                </label>
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  autoComplete="new-password"
+                  required
+                  className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                  placeholder="Password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="confirmPassword" className="sr-only">
+                  Confirm Password
+                </label>
+                <input
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  type="password"
+                  autoComplete="new-password"
+                  required
+                  className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                  placeholder="Confirm Password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <button
+                type="submit"
+                disabled={submitting}
+                className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {submitting ? 'Creating Account...' : 'Create Account'}
+              </button>
+            </div>
+
+            {message && (
+              <div className={`mt-4 p-3 rounded-md text-sm ${
+                message.includes('error') || message.includes('Error')
+                  ? 'bg-red-50 text-red-700 border border-red-200' 
+                  : 'bg-green-50 text-green-700 border border-green-200'
+              }`}>
+                <div dangerouslySetInnerHTML={{ __html: message }} />
               </div>
             )}
-            
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                Email Address
-              </label>
-              <input
-                ref={emailInputRef}
-                key={`email-${email}-${Date.now()}`}
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="email"
-                required
-                className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm bg-gray-100 cursor-not-allowed"
-                placeholder={email ? email : "Loading email..."}
-                value={email || ''}
-                readOnly
-                disabled
-              />
-              {email && (
-                <p className="mt-1 text-xs text-green-600">
-                  ✓ Email pre-populated: {email}
-                </p>
-              )}
-            </div>
-            
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                Password
-              </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="new-password"
-                required
-                className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="Enter your password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-            
-            <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
-                Confirm Password
-              </label>
-              <input
-                id="confirmPassword"
-                name="confirmPassword"
-                type="password"
-                autoComplete="new-password"
-                required
-                className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="Confirm your password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-              />
-            </div>
-          </div>
-
-          {message && (
-            <div className={`text-sm ${message.includes('successfully') ? 'text-green-600' : 'text-red-600'}`}>
-              {message}
-            </div>
-          )}
-
-          <div>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {submitting ? 'Creating Account...' : 'Create Account'}
-            </button>
-          </div>
-
-          <div className="text-center">
-            <Link
-              href="/"
-              className="text-sm text-indigo-600 hover:text-indigo-500"
-            >
-              Already have an account? Sign in
-            </Link>
-          </div>
-        </form>
+          </form>
+        </div>
       </div>
     </div>
   )

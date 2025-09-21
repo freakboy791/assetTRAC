@@ -44,8 +44,14 @@ export default function AuthPage() {
       // Check for email parameter from invitation link
       const urlParams = new URLSearchParams(window.location.search)
       const emailParam = urlParams.get('email')
+      const messageParam = urlParams.get('message')
       
-      if (emailParam) {
+      if (messageParam) {
+        setMessage(messageParam)
+        setErrorType('admin_approval_pending')
+        // Clear the message parameter from URL
+        window.history.replaceState(null, '', '/auth')
+      } else if (emailParam) {
         setEmail(emailParam)
         setMessage('Email confirmed successfully!<br>Set a password and log in.')
         setIsFromInvitation(true)
@@ -95,6 +101,9 @@ export default function AuthPage() {
           setErrorType('email_not_found')
           setAccountExists(false)
           setMessage('No account exists for this email address. Please contact your manager or the assetTRAC Admin to request an invitation.')
+        } else if (result.message.includes('Account not activated')) {
+          setErrorType('admin_approval_pending')
+          setMessage('Your account is waiting for admin approval. Please contact your administrator to approve your account.')
         } else if (result.message.includes('Email not confirmed')) {
           setErrorType('email_not_confirmed')
           setMessage('Please check your email and click the confirmation link before logging in. If you need a new confirmation email, try registering again.')
@@ -297,7 +306,8 @@ export default function AuthPage() {
     setMessage('')
 
     try {
-      const invitationLink = `${window.location.origin}/invite/accept/${currentInvite.token}`
+      // Use the correct join URL pattern
+      const invitationLink = `${window.location.origin}/join/${currentInvite.token}`
       
       const response = await fetch('/api/send-invite-email', {
         method: 'POST',
@@ -327,14 +337,31 @@ export default function AuthPage() {
   }
 
   const handleNotifyAdmin = async () => {
-    if (!currentInvite) return
+    if (!email) return
 
     setNotifyingAdmin(true)
     setMessage('')
 
     try {
-      // TODO: Implement admin notification API
-      setMessage('Admin notification feature temporarily disabled. Please contact your administrator directly.')
+      const response = await fetch('/api/admin/notify-approval-request', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userEmail: email,
+          userName: email.split('@')[0], // Use email prefix as name
+          companyName: currentInvite?.company_name || 'Unknown Company'
+        })
+      })
+
+      const result = await response.json()
+
+      if (response.ok) {
+        setMessage('Admin notification sent successfully! The administrator has been notified of your approval request and will receive an email with a direct link to approve your account.')
+      } else {
+        setMessage(`Error: ${result.message || 'Failed to send notification'}`)
+      }
     } catch (error) {
       setMessage(`Error: ${error}`)
     } finally {

@@ -44,6 +44,28 @@ export default function HomePage() {
     if (typeof window !== 'undefined') {
       const hash = window.location.hash
       if (hash.includes('access_token')) {
+        // This is a Supabase magic link - check if it's an invitation
+        const urlParams = new URLSearchParams(hash.substring(1))
+        const accessToken = urlParams.get('access_token')
+        
+        if (accessToken) {
+          try {
+            // Decode the JWT token to get user metadata
+            const payload = JSON.parse(atob(accessToken.split('.')[1]))
+            console.log('Magic link payload:', payload)
+            
+            if (payload.user_metadata?.invitation_link) {
+              // This is an invitation magic link - redirect to our custom page
+              const invitationLink = payload.user_metadata.invitation_link
+              console.log('Redirecting to invitation link:', invitationLink)
+              window.location.href = invitationLink
+              return
+            }
+          } catch (error) {
+            console.error('Error decoding magic link token:', error)
+          }
+        }
+        
         setMessage('Email confirmed successfully!<br>Set a password and log in.')
       }
       
@@ -351,11 +373,27 @@ export default function HomePage() {
     setMessage('')
 
     try {
-      // TODO: Re-implement admin notification API
-      // For now, just show a success message
-      setMessage('Admin notification feature temporarily disabled. Please contact your administrator directly.')
+      const response = await fetch('/api/admin/notify-approval-request', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userEmail: currentInvite.invited_email,
+          userName: currentInvite.invited_email.split('@')[0],
+          companyName: currentInvite.company_name || 'Unknown Company'
+        })
+      })
+
+      const result = await response.json()
+
+      if (response.ok) {
+        setMessage('Admin notification sent successfully! The administrator has been notified of your approval request and will receive an email with a direct link to approve your account.')
+      } else {
+        setMessage(`Error: ${result.message || 'Failed to send notification'}`)
+      }
     } catch (error) {
-      setMessage(`Error contacting admin: ${error}`)
+      setMessage(`Error: ${error}`)
     } finally {
       setNotifyingAdmin(false)
     }

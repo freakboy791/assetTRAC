@@ -15,51 +15,54 @@ export default function AdminInvitePage() {
   const getRoleDescription = (role: string) => {
     switch (role) {
       case 'viewer-asset':
-        return 'Read-only access to asset information only. Can view asset details, status, and location.'
+        return 'Read-only access to asset information only. Can view asset details, status, and location (no create, update, delete).'
       case 'viewer-financials':
-        return 'Read-only access to financial data only. Can view costs, depreciation, and financial reports.'
+        return 'Read-only access to financial data only. Can view costs, depreciation, and financial reports (no create, update, delete).'
       case 'viewer-both':
-        return 'Read-only access to both asset and financial data. Full viewer permissions.'
+        return 'Read-only access to both asset and financial data. Can view all information but cannot make changes.'
       case 'tech':
-        return 'Asset management access. Can create, update, and manage company assets.'
+        return 'Asset management access only. Can create, update, and manage company assets. No access to financial data.'
       case 'manager-asset':
-        return 'Management access with asset view permissions. Can approve Tech/Viewers, manage assets, and send invitations.'
+        return 'Management access with full asset management permissions. Can approve Tech/Viewers, manage assets (create, update, delete), and send invitations. No financial access.'
       case 'manager-financials':
-        return 'Management access with financials view permissions. Can approve Tech/Viewers, manage assets, and send invitations.'
+        return 'Management access with full financials management permissions. Can approve Tech/Viewers, manage financial data (create, update, delete), and send invitations. No asset access.'
       case 'manager-both':
-        return 'Management access with both asset and financials permissions. Can approve Tech/Viewers, manage assets, and send invitations.'
+        return 'Management access with both asset and financials management permissions. Can approve Tech/Viewers, manage all data (create, update, delete), and send invitations.'
       case 'owner':
-        return 'Full company access. Can manage all settings, users, and will be redirected to company setup.'
+        return 'Full company access. Can manage all settings, users, company information, assets, and financials with full create, update, delete permissions.'
       default:
         return 'Select a role to see description.'
     }
   }
 
-  const getAvailableRoles = (userRole: string) => {
+  const getAvailableRoles = (userRoles: string[]) => {
     const allRoles = [
-      { value: 'viewer-asset', label: 'Viewer - Asset View' },
-      { value: 'viewer-financials', label: 'Viewer - Financials View' },
-      { value: 'viewer-both', label: 'Viewer - Both Asset & Financials' },
+      { value: 'viewer-asset', label: 'Viewer - Asset' },
+      { value: 'viewer-financials', label: 'Viewer - Financials' },
+      { value: 'viewer-both', label: 'Viewer - Both' },
       { value: 'tech', label: 'Tech' },
-      { value: 'manager-asset', label: 'Manager - Asset View' },
-      { value: 'manager-financials', label: 'Manager - Financials View' },
-      { value: 'manager-both', label: 'Manager - Both Asset & Financials' },
+      { value: 'manager-asset', label: 'Manager - Asset' },
+      { value: 'manager-financials', label: 'Manager - Financials' },
+      { value: 'manager-both', label: 'Manager - Both' },
       { value: 'owner', label: 'Owner' }
     ]
 
-    switch (userRole) {
-      case 'admin':
-        return allRoles // Admin can manage all roles
-      case 'owner':
-        return allRoles.filter(role => role.value !== 'admin') // Owner can manage all except admin
-      case 'manager':
-      case 'manager-asset':
-      case 'manager-financials':
-      case 'manager-both':
-        return allRoles.filter(role => !['admin', 'owner', 'manager-asset', 'manager-financials', 'manager-both'].includes(role.value)) // Manager can manage tech and viewers
-      default:
-        return [] // Other roles cannot send invitations
+    // Admin and Owner can invite any role (except admin)
+    if (userRoles.includes('admin') || userRoles.includes('owner')) {
+      return allRoles // Admin and Owner can invite all roles
     }
+    
+    // Manager can only invite tech and viewer roles (all sub-types)
+    if (userRoles.some(role => role.startsWith('manager'))) {
+      return allRoles.filter(role => 
+        role.value === 'tech' || 
+        role.value.startsWith('viewer-') || 
+        role.value === 'viewer'
+      )
+    }
+    
+    // Tech and Viewer cannot send invitations
+    return []
   }
 
   useEffect(() => {
@@ -78,9 +81,38 @@ export default function AdminInvitePage() {
 
         setUser(session.user)
 
-        // For now, assume admin role
-        setUserRoles(['admin'])
-        setIsAdmin(true)
+        // Get role information from session storage
+        const storedRoles = sessionStorage.getItem('userRoles')
+        const storedIsAdmin = sessionStorage.getItem('isAdmin')
+        
+        let roles: string[] = []
+        let isAdminRole = false
+
+        if (storedRoles) {
+          roles = JSON.parse(storedRoles)
+          isAdminRole = storedIsAdmin === 'true'
+        } else {
+          // Fallback: check user metadata if session storage is empty
+          const userMetadata = session.user.user_metadata
+          roles = userMetadata?.roles || []
+          isAdminRole = userMetadata?.isAdmin || false
+        }
+
+        setUserRoles(roles)
+        setIsAdmin(isAdminRole)
+
+        // Check if user has permission to send invitations
+        const canSendInvitations = isAdminRole || 
+                                  roles.includes('owner') || 
+                                  roles.some(role => role.startsWith('manager'))
+        if (!canSendInvitations) {
+          setStatusMessage('You do not have permission to send invitations')
+          // Redirect to dashboard after showing message
+          setTimeout(() => {
+            window.location.href = '/dashboard'
+          }, 2000)
+          return
+        }
       } catch (error) {
         window.location.href = '/'
       }
@@ -90,16 +122,26 @@ export default function AdminInvitePage() {
   }, [])
 
   const getDefaultRole = (currentUserRoles: string[], availableRoles: any[]) => {
-    // For admins, default to Owner; for others, use first available role
-    return currentUserRoles.includes('admin') && availableRoles.some(role => role.value === 'owner')
-      ? 'owner'
-      : availableRoles.length > 0 ? availableRoles[0].value : ''
+    // If user is admin or owner, default to manager-both
+    if (currentUserRoles.includes('admin') || currentUserRoles.includes('owner')) {
+      return availableRoles.find(role => role.value === 'manager-both')?.value || 
+             availableRoles.find(role => role.value.startsWith('manager-'))?.value || 
+             availableRoles[0]?.value || ''
+    }
+    
+    // For manager, default to tech
+    if (currentUserRoles.some(role => role.startsWith('manager'))) {
+      return availableRoles.find(role => role.value === 'tech')?.value || availableRoles[0]?.value || ''
+    }
+    
+    // For other roles, use the first available role
+    return availableRoles.length > 0 ? availableRoles[0].value : ''
   }
 
   // Set default role when userRoles are loaded
   useEffect(() => {
     if (userRoles.length > 0 && !userRole) {
-      const availableRoles = getAvailableRoles(userRoles[0])
+      const availableRoles = getAvailableRoles(userRoles)
       if (availableRoles.length > 0) {
         const defaultRole = getDefaultRole(userRoles, availableRoles)
         setUserRole(defaultRole)
@@ -137,7 +179,7 @@ export default function AdminInvitePage() {
         setInvitedEmail('')
         setCompanyName('')
         setPersonalMessage('')
-        const availableRoles = getAvailableRoles(userRoles[0] || 'admin')
+        const availableRoles = getAvailableRoles(userRoles)
         const defaultRole = getDefaultRole(userRoles, availableRoles)
         setUserRole(defaultRole)
         
@@ -328,7 +370,7 @@ export default function AdminInvitePage() {
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-800"
                     required
                   >
-                    {getAvailableRoles(userRoles[0] || 'admin').map((role) => (
+                    {getAvailableRoles(userRoles).map((role) => (
                       <option key={role.value} value={role.value}>
                         {role.label}
                       </option>

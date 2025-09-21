@@ -15,18 +15,47 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    // Get the first company (assuming single company for now)
-    const { data: companies, error } = await supabase
-      .from('companies')
-      .select('*')
-      .limit(1)
+    // Get the authorization token from the request headers
+    const authHeader = req.headers.authorization
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'No authorization token provided' })
+    }
 
-    if (error) {
-      console.log('Error fetching company:', error)
+    const token = authHeader.split(' ')[1]
+    
+    // Get the user from the token
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token)
+    if (userError || !user) {
+      return res.status(401).json({ error: 'Invalid token' })
+    }
+
+    // Get the company associated with this user through company_users table
+    const { data: companyUsers, error: companyUsersError } = await supabase
+      .from('company_users')
+      .select(`
+        company_id,
+        companies (
+          id,
+          name,
+          street,
+          city,
+          state,
+          zip,
+          phone,
+          email,
+          depreciation_rate,
+          note,
+          created_at
+        )
+      `)
+      .eq('user_id', user.id)
+
+    if (companyUsersError) {
+      console.log('Error fetching user company:', companyUsersError)
       return res.status(500).json({ error: 'Failed to fetch company data' })
     }
 
-    if (!companies || companies.length === 0) {
+    if (!companyUsers || companyUsers.length === 0) {
       // Return default empty company data
       return res.status(200).json({
         company: {
@@ -43,10 +72,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       })
     }
 
-    // Log the actual data being returned for debugging
-    console.log('Company data from database:', companies[0])
+    // Extract the company data from the joined result
+    const company = companyUsers[0].companies
     
-    return res.status(200).json({ company: companies[0] })
+    // Log the actual data being returned for debugging
+    console.log('Company data from database:', company)
+    
+    return res.status(200).json({ company })
   } catch (error) {
     console.log('Error in get company API:', error)
     return res.status(500).json({ error: 'Internal server error' })

@@ -7,7 +7,11 @@ export default function CompanyManagePage() {
   const [submitting, setSubmitting] = useState(false)
   const [message, setMessage] = useState('')
   const [isOwner, setIsOwner] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [isManager, setIsManager] = useState(false)
+  const [userRoles, setUserRoles] = useState<string[]>([])
   const [company, setCompany] = useState<any>(null)
+  const [isEditing, setIsEditing] = useState(false)
   const [companyData, setCompanyData] = useState({
     name: '',
     street: '',
@@ -36,9 +40,30 @@ export default function CompanyManagePage() {
         setUser(session.user)
         
         // Get role information from session storage
+        const storedRoles = sessionStorage.getItem('userRoles')
         const storedIsOwner = sessionStorage.getItem('isOwner')
-        const isOwnerRole = storedIsOwner === 'true'
+        const storedIsAdmin = sessionStorage.getItem('isAdmin')
+        
+        let roles: string[] = []
+        let isOwnerRole = false
+        let isAdminRole = false
+
+        if (storedRoles) {
+          roles = JSON.parse(storedRoles)
+          isOwnerRole = storedIsOwner === 'true'
+          isAdminRole = storedIsAdmin === 'true'
+        } else {
+          // Fallback: check user metadata if session storage is empty
+          const userMetadata = session.user.user_metadata
+          roles = userMetadata?.roles || []
+          isOwnerRole = userMetadata?.isOwner || false
+          isAdminRole = userMetadata?.isAdmin || false
+        }
+
+        setUserRoles(roles)
         setIsOwner(isOwnerRole)
+        setIsAdmin(isAdminRole)
+        setIsManager(roles.includes('manager'))
         
         await loadCompanyData()
         setLoading(false)
@@ -53,7 +78,21 @@ export default function CompanyManagePage() {
 
   const loadCompanyData = async () => {
     try {
-      const response = await fetch('/api/company/get')
+      // Get the session to get the access token
+      const { supabase: getSupabaseClient } = await import('../../lib/supabaseClient')
+      const supabase = getSupabaseClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (!session?.access_token) {
+        setMessage('No valid session found')
+        return
+      }
+
+      const response = await fetch('/api/company/get', {
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      })
       const data = await response.json()
       
       if (data.company) {
@@ -83,14 +122,20 @@ export default function CompanyManagePage() {
     }))
   }
 
+  // Helper function to check if user can edit company
+  const canEditCompany = () => {
+    return isAdmin || isOwner || userRoles.some(role => role.startsWith('manager'))
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (!isOwner) {
-      setMessage('Only company owners can update company information')
+    if (!canEditCompany()) {
+      setMessage('You do not have permission to update company information')
       return
     }
 
+    console.log('Submitting company data:', companyData)
     setSubmitting(true)
     setMessage('')
 
@@ -108,11 +153,14 @@ export default function CompanyManagePage() {
       if (response.ok) {
         setMessage('Company information updated successfully!')
         await loadCompanyData() // Reload data to show updated values
+        setIsEditing(false) // Exit edit mode after successful save
       } else {
-        setMessage(`Error: ${result.message}`)
+        console.error('Company save error:', result)
+        setMessage(`Error: ${result.error || result.message || 'Failed to save company information'}`)
       }
     } catch (error) {
-      setMessage(`Error: ${error}`)
+      console.error('Company save error:', error)
+      setMessage(`Error: ${error instanceof Error ? error.message : 'Failed to save company information'}`)
     } finally {
       setSubmitting(false)
     }
@@ -234,15 +282,31 @@ export default function CompanyManagePage() {
           <div className="bg-white shadow rounded-lg">
             <div className="px-4 py-5 sm:p-6">
               <div className="mb-8">
-                <h1 className="text-3xl font-bold text-gray-900">
-                  {isOwner ? 'Manage Company Information' : 'Company Information'}
-                </h1>
-                <p className="mt-2 text-gray-600">
-                  {isOwner 
-                    ? 'Update your company details and settings' 
-                    : 'View your company information'
-                  }
-                </p>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h1 className="text-3xl font-bold text-gray-900">
+                      {canEditCompany() ? 'Manage Company Information' : 'Company Information'}
+                    </h1>
+                    <p className="mt-2 text-gray-600">
+                      {canEditCompany() 
+                        ? 'Update your company details and settings' 
+                        : 'View your company information'
+                      }
+                    </p>
+                  </div>
+                  {canEditCompany() && (
+                    <button
+                      onClick={() => setIsEditing(!isEditing)}
+                      className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                        isEditing
+                          ? 'bg-gray-600 text-white hover:bg-gray-700'
+                          : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                      }`}
+                    >
+                      {isEditing ? 'Cancel Edit' : 'Edit Company'}
+                    </button>
+                  )}
+                </div>
               </div>
 
               {message && (
@@ -267,9 +331,9 @@ export default function CompanyManagePage() {
                     id="name"
                     value={companyData.name}
                     onChange={handleInputChange}
-                    disabled={!isOwner}
+                    disabled={!isEditing || !canEditCompany()}
                     className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-800 ${
-                      isOwner 
+                      isEditing && canEditCompany()
                         ? 'border-gray-300' 
                         : 'border-gray-200 bg-gray-50 cursor-not-allowed'
                     }`}
@@ -293,9 +357,9 @@ export default function CompanyManagePage() {
                         id="street"
                         value={companyData.street}
                         onChange={handleInputChange}
-                        disabled={!isOwner}
+                        disabled={!isEditing || !canEditCompany()}
                         className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-800 ${
-                          isOwner 
+                          isEditing && canEditCompany()
                             ? 'border-gray-300' 
                             : 'border-gray-200 bg-gray-50 cursor-not-allowed'
                         }`}
@@ -313,9 +377,9 @@ export default function CompanyManagePage() {
                           id="city"
                           value={companyData.city}
                           onChange={handleInputChange}
-                          disabled={!isOwner}
+                          disabled={!isEditing || !canEditCompany()}
                           className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-800 ${
-                            isOwner 
+                            isEditing && canEditCompany()
                               ? 'border-gray-300' 
                               : 'border-gray-200 bg-gray-50 cursor-not-allowed'
                           }`}
@@ -332,9 +396,9 @@ export default function CompanyManagePage() {
                           id="state"
                           value={companyData.state}
                           onChange={handleInputChange}
-                          disabled={!isOwner}
+                          disabled={!isEditing || !canEditCompany()}
                           className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-800 ${
-                            isOwner 
+                            isEditing && canEditCompany()
                               ? 'border-gray-300' 
                               : 'border-gray-200 bg-gray-50 cursor-not-allowed'
                           }`}
@@ -351,9 +415,9 @@ export default function CompanyManagePage() {
                           id="zip"
                           value={companyData.zip}
                           onChange={handleInputChange}
-                          disabled={!isOwner}
+                          disabled={!isEditing || !canEditCompany()}
                           className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-800 ${
-                            isOwner 
+                            isEditing && canEditCompany()
                               ? 'border-gray-300' 
                               : 'border-gray-200 bg-gray-50 cursor-not-allowed'
                           }`}
@@ -375,9 +439,9 @@ export default function CompanyManagePage() {
                       id="phone"
                       value={companyData.phone}
                       onChange={handleInputChange}
-                      disabled={!isOwner}
+                      disabled={!isEditing || !canEditCompany()}
                       className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-800 ${
-                        isOwner 
+                        isEditing && canEditCompany()
                           ? 'border-gray-300' 
                           : 'border-gray-200 bg-gray-50 cursor-not-allowed'
                       }`}
@@ -394,9 +458,9 @@ export default function CompanyManagePage() {
                       id="email"
                       value={companyData.email}
                       onChange={handleInputChange}
-                      disabled={!isOwner}
+                      disabled={!isEditing || !canEditCompany()}
                       className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-800 ${
-                        isOwner 
+                        isEditing && canEditCompany()
                           ? 'border-gray-300' 
                           : 'border-gray-200 bg-gray-50 cursor-not-allowed'
                       }`}
@@ -419,7 +483,12 @@ export default function CompanyManagePage() {
                       min="0"
                       max="100"
                       step="0.01"
-                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                      disabled={!isEditing || !canEditCompany()}
+                      className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-800 ${
+                        isEditing && canEditCompany()
+                          ? 'border-gray-300' 
+                          : 'border-gray-200 bg-gray-50 cursor-not-allowed'
+                      }`}
                     />
                     <p className="mt-1 text-sm text-gray-500">
                       Set the default depreciation rate for company assets
@@ -436,7 +505,7 @@ export default function CompanyManagePage() {
                     Back to Dashboard
                   </button>
                   
-                  {isOwner && (
+                  {isEditing && canEditCompany() && (
                     <button
                       type="submit"
                       disabled={submitting}

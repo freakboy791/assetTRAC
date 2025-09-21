@@ -260,17 +260,75 @@ export default function CreateCompanyPage() {
       console.log('Company creation response:', { status: response.status, result })
 
       if (response.ok) {
-        setMessage('Company created successfully! Redirecting to dashboard...')
-        console.log('Company created successfully, redirecting in 2 seconds...')
+        setMessage('Company created successfully! Checking admin approval...')
+        console.log('Company created successfully, checking admin approval...')
         
         // Update session storage to reflect that user now has a company
         sessionStorage.setItem('hasCompany', 'true')
         console.log('Updated hasCompany flag in session storage')
         
-        setTimeout(() => {
-          console.log('Redirecting to dashboard...')
-          window.location.href = '/dashboard'
-        }, 2000)
+        // Check if user is approved by admin
+        try {
+          const approvalResponse = await fetch('/api/auth/getUser', {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${session.access_token}`
+            }
+          })
+          
+          const approvalData = await approvalResponse.json()
+          console.log('Admin approval check result:', approvalData)
+          
+          if (approvalData.isApproved || approvalData.isAdmin) {
+            setMessage('Company created successfully! Redirecting to dashboard...')
+            setTimeout(() => {
+              console.log('User approved or admin, redirecting to dashboard...')
+              window.location.href = '/dashboard'
+            }, 2000)
+          } else {
+            setMessage('Company created successfully! However, your account is waiting for admin approval. You will be redirected to login.')
+            setTimeout(async () => {
+              console.log('User not approved, signing out and redirecting to login...')
+              // Sign out the user from Supabase
+              try {
+                const { supabase: getSupabaseClient } = await import('../../lib/supabaseClient')
+                const supabase = getSupabaseClient()
+                await supabase.auth.signOut()
+              } catch (error) {
+                console.error('Error signing out:', error)
+              }
+              
+              // Clear all storage
+              sessionStorage.clear()
+              localStorage.clear()
+              
+              // Redirect to login
+              window.location.href = '/auth?message=Your account is waiting for admin approval. Please contact your administrator to approve your account.'
+            }, 3000)
+          }
+        } catch (approvalError) {
+          console.error('Error checking admin approval:', approvalError)
+          // If we can't check approval, assume not approved for safety
+          setMessage('Company created successfully! However, your account is waiting for admin approval. You will be redirected to login.')
+          setTimeout(async () => {
+            console.log('Approval check failed, signing out and redirecting to login...')
+            // Sign out the user from Supabase
+            try {
+              const { supabase: getSupabaseClient } = await import('../../lib/supabaseClient')
+              const supabase = getSupabaseClient()
+              await supabase.auth.signOut()
+            } catch (error) {
+              console.error('Error signing out:', error)
+            }
+            
+            // Clear all storage
+            sessionStorage.clear()
+            localStorage.clear()
+            
+            // Redirect to login
+            window.location.href = '/auth?message=Your account is waiting for admin approval. Please contact your administrator to approve your account.'
+          }, 3000)
+        }
       } else {
         console.error('Company creation failed:', result)
         setMessage(`Error: ${result.message || result.error || 'Failed to create company'}`)
@@ -492,7 +550,7 @@ export default function CreateCompanyPage() {
                     value={companyName}
                     onChange={(e) => setCompanyName(e.target.value)}
                     className={`mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm ${
-                      user?.user_metadata?.company_name ? 'bg-gray-100 cursor-not-allowed' : ''
+                      user?.user_metadata?.company_name ? 'bg-green-50 border-green-300 cursor-not-allowed' : ''
                     }`}
                     placeholder="Your Company Name"
                     required
@@ -615,7 +673,7 @@ export default function CreateCompanyPage() {
                       value={companyEmail}
                       onChange={(e) => setCompanyEmail(e.target.value)}
                       className={`mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm ${
-                        user?.user_metadata?.invited_email ? 'bg-gray-100 cursor-not-allowed' : ''
+                        user?.user_metadata?.invited_email ? 'bg-green-50 border-green-300 cursor-not-allowed' : ''
                       }`}
                       placeholder="contact@yourcompany.com"
                       readOnly={!!user?.user_metadata?.invited_email}

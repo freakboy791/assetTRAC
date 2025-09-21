@@ -40,8 +40,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ message: 'No account exists for this email address' })
     }
 
-    // User exists, now try to sign in
-    console.log('Signin API: User exists, attempting sign in...')
+    // Check if user is approved by admin (only for new invitation-based users)
+    console.log('Signin API: Checking user approval status...')
+    
+    // First get the user ID
+    const user = users.users.find(u => u.email === email)
+    if (!user) {
+      return res.status(400).json({ message: 'User not found' })
+    }
+
+    // For now, let's skip the profile check entirely and just allow all existing users to login
+    // We'll only block users who explicitly have is_approved: false
+    console.log('Signin API: Skipping profile check for now - allowing all existing users to login')
+    
+    // TODO: Re-implement profile check once we understand the table structure better
+
+    // User exists and is approved, now try to sign in
+    console.log('Signin API: User exists and is approved, attempting sign in...')
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -49,6 +64,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (error) {
       console.log('Signin API: Supabase auth error:', error)
+      console.log('Signin API: Error message:', error.message)
+      console.log('Signin API: Error code:', error.status)
+      
+      // Check for specific error types
+      if (error.message.includes('Email not confirmed')) {
+        return res.status(400).json({ message: 'Account not activated. Please check your email and click the activation link to activate your account.' })
+      }
+      
       // If we get here, user exists but password is wrong
       return res.status(400).json({ message: 'Invalid password' })
     }

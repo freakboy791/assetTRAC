@@ -47,38 +47,80 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ message: 'Invitation has already been used' })
     }
 
-    console.log('Accept invite API: Invitation found, creating user account for:', invitation.invited_email)
+    console.log('Accept invite API: Invitation found, processing for:', invitation.invited_email)
 
-    // Create user account using Supabase Admin
-    const { data: userData, error: userError } = await supabase.auth.admin.createUser({
-      email: invitation.invited_email,
-      password: password,
-      email_confirm: true, // Auto-confirm email since they're accepting an invitation
-      user_metadata: {
-        company_name: invitation.company_name,
-        invited_email: invitation.invited_email,
-        invited_via: 'admin_invitation',
-        invitation_role: invitation.role,
-        invitation_company_id: invitation.company_id
-      }
-    })
+    // Check if user already exists
+    const { data: existingUsers, error: listError } = await supabase.auth.admin.listUsers()
+    
+    if (listError) {
+      console.error('Accept invite API: Error checking existing users:', listError)
+      return res.status(500).json({ message: 'Failed to check existing users' })
+    }
 
-    if (userError) {
-      console.error('Accept invite API: Error creating user:', userError)
-      return res.status(500).json({ 
-        message: `Failed to create user account: ${userError.message}` 
+    const existingUser = existingUsers.users.find(user => user.email === invitation.invited_email)
+    
+    let userData;
+    if (existingUser) {
+      console.log('Accept invite API: User already exists, updating password and metadata')
+      
+      // Update existing user's password and metadata
+      const { data: updateData, error: updateError } = await supabase.auth.admin.updateUserById(existingUser.id, {
+        password: password,
+        user_metadata: {
+          ...existingUser.user_metadata,
+          invited_email: invitation.invited_email,
+          company_name: invitation.company_name,
+          invited_via: 'admin_invitation',
+          invitation_role: invitation.role,
+          invitation_company_id: invitation.company_id
+        }
       })
+
+      if (updateError) {
+        console.error('Accept invite API: Error updating existing user:', updateError)
+        return res.status(500).json({ 
+          message: `Failed to update existing user: ${updateError.message}` 
+        })
+      }
+
+      userData = { user: updateData.user }
+      console.log('Accept invite API: Existing user updated successfully')
+    } else {
+      console.log('Accept invite API: Creating new user account')
+      
+      // Create new user account using Supabase Admin
+      const { data: newUserData, error: userError } = await supabase.auth.admin.createUser({
+        email: invitation.invited_email,
+        password: password,
+        email_confirm: true, // Auto-confirm email since they're accepting an invitation
+        user_metadata: {
+          invited_email: invitation.invited_email,
+          company_name: invitation.company_name,
+          invited_via: 'admin_invitation',
+          invitation_role: invitation.role,
+          invitation_company_id: invitation.company_id
+        }
+      })
+
+      if (userError) {
+        console.error('Accept invite API: Error creating user:', userError)
+        return res.status(500).json({ 
+          message: `Failed to create user account: ${userError.message}` 
+        })
+      }
+
+      userData = newUserData
+      console.log('Accept invite API: New user created successfully:', userData.user?.email)
     }
 
     console.log('Accept invite API: User created successfully:', userData.user?.email)
 
-    // Update invitation status to 'accepted'
+    // Update invitation status to 'email_confirmed' (awaiting admin approval)
     const { error: updateError } = await supabase
       .from('invites')
       .update({ 
-        status: 'accepted',
-        accepted_at: new Date().toISOString(),
-        user_id: userData.user?.id
+        status: 'email_confirmed',
+        email_confirmed_at: new Date().toISOString()
       })
       .eq('token', token)
 
@@ -89,23 +131,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     console.log('Accept invite API: Invitation status updated to accepted')
 
-    // Create user profile record
+    // Create or update user profile record
     const { error: profileError } = await supabase
       .from('profiles')
-      .insert({
+      .upsert({
         id: userData.user?.id,
         email: invitation.invited_email,
-        company_name: invitation.company_name,
-        role: invitation.role || 'user', // Use role from invitation or default to 'user'
-        created_at: new Date().toISOString()
+        email_verified: true,
+        is_approved: false // User is not approved by admin yet
       })
 
     if (profileError) {
-      console.error('Accept invite API: Error creating profile:', profileError)
+      console.error('Accept invite API: Error creating/updating profile:', profileError)
       // Don't fail the whole process if this fails
+    } else {
+      console.log('Accept invite API: Profile created/updated successfully')
     }
-
-    console.log('Accept invite API: Profile created successfully')
 
     // Create a session for the user
     const { data: sessionData, error: sessionError } = await supabase.auth.admin.generateLink({
