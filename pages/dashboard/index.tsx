@@ -2,6 +2,37 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Invitation } from '../../types'
 
+// Tab-specific storage utility
+const getTabId = () => {
+  let tabId = sessionStorage.getItem('tabId')
+  if (!tabId) {
+    tabId = `tab_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    sessionStorage.setItem('tabId', tabId)
+  }
+  return tabId
+}
+
+const setTabStorage = (key: string, value: string) => {
+  const tabId = getTabId()
+  sessionStorage.setItem(`${tabId}_${key}`, value)
+}
+
+const getTabStorage = (key: string) => {
+  const tabId = getTabId()
+  return sessionStorage.getItem(`${tabId}_${key}`)
+}
+
+const clearTabStorage = () => {
+  const tabId = getTabId()
+  const keys = Object.keys(sessionStorage)
+  keys.forEach(key => {
+    if (key.startsWith(`${tabId}_`)) {
+      sessionStorage.removeItem(key)
+    }
+  })
+  sessionStorage.removeItem('tabId')
+}
+
 export default function DashboardPage() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -12,6 +43,10 @@ export default function DashboardPage() {
   const [invitations, setInvitations] = useState<Invitation[]>([])
   const [invitationsLoading, setInvitationsLoading] = useState(false)
   const [companyData, setCompanyData] = useState<any>(null)
+  const [recentActivity, setRecentActivity] = useState<any[]>([])
+  const [completedUsers, setCompletedUsers] = useState<any[]>([])
+  const [activityLoading, setActivityLoading] = useState(false)
+  const [usersLoading, setUsersLoading] = useState(false)
 
   useEffect(() => {
     const checkUser = async () => {
@@ -54,8 +89,9 @@ export default function DashboardPage() {
             sessionStorage.clear()
             localStorage.clear()
             window.location.href = '/auth?message=Your account is waiting for admin approval. Please contact your administrator to approve your account.'
-            return
-          }
+          return
+        }
+
         } catch (approvalError) {
           console.error('Dashboard: Error checking admin approval:', approvalError)
           // If we can't check approval, assume not approved for safety
@@ -66,11 +102,11 @@ export default function DashboardPage() {
           return
         }
 
-        // Get role information from session storage (set during login)
-        const storedRoles = sessionStorage.getItem('userRoles')
-        const storedIsAdmin = sessionStorage.getItem('isAdmin')
-        const storedIsOwner = sessionStorage.getItem('isOwner')
-        const storedHasCompany = sessionStorage.getItem('hasCompany')
+        // Get role information from tab-specific session storage (set during login)
+        const storedRoles = getTabStorage('userRoles')
+        const storedIsAdmin = getTabStorage('isAdmin')
+        const storedIsOwner = getTabStorage('isOwner')
+        const storedHasCompany = getTabStorage('hasCompany')
 
         let roles: string[] = []
         let isOwnerRole = false
@@ -91,6 +127,8 @@ export default function DashboardPage() {
           isAdminRole = userMetadata?.isAdmin || false
         }
 
+
+
         setUserRoles(roles)
         setIsAdmin(isAdminRole)
         setIsOwner(isOwnerRole)
@@ -102,8 +140,8 @@ export default function DashboardPage() {
           
           // Check if user actually has a company in the database
           const { data: companyUsers, error: companyError } = await supabase
-            .from('company_users')
-            .select('company_id')
+              .from('company_users')
+              .select('company_id')
             .eq('user_id', session.user.id)
             .limit(1)
           
@@ -111,19 +149,28 @@ export default function DashboardPage() {
             console.error('Dashboard: Error checking company association:', companyError)
           } else if (companyUsers && companyUsers.length > 0) {
             console.log('Dashboard: User has company in database, updating session storage')
-            sessionStorage.setItem('hasCompany', 'true')
-            setHasCompany(true)
-          } else {
+            setTabStorage('hasCompany', 'true')
+              setHasCompany(true)
+            } else {
             console.log('Dashboard: Owner with no company, redirecting to company creation')
-            window.location.href = '/company/create'
-            return
+              window.location.href = '/company/create'
+              return
+            }
           }
-        }
 
         // Load invitations if user is admin
         if (isAdminRole) {
           console.log('Dashboard: User is admin, loading invitations...')
           await loadInvitations()
+        }
+        
+        
+        // Load recent activity for all users
+        await loadRecentActivity()
+        
+        // Load completed users if user has permission
+        if (isAdminRole || isOwner || userRoles.some(role => role.startsWith('manager'))) {
+          await loadCompletedUsers()
         }
 
         // Load company data for viewer/tech roles to show company recap
@@ -205,6 +252,64 @@ export default function DashboardPage() {
     }
   }
 
+  const loadRecentActivity = async () => {
+    setActivityLoading(true)
+    try {
+      // Get current user info for role-based filtering
+      const userEmail = user?.email || ''
+      const storedRoles = getTabStorage('userRoles')
+      const userRolesFromStorage = storedRoles ? JSON.parse(storedRoles) : []
+      const userRolesString = JSON.stringify(userRolesFromStorage)
+      
+      const response = await fetch(`/api/activity/log?limit=10&user_email=${encodeURIComponent(userEmail)}&user_roles=${encodeURIComponent(userRolesString)}`)
+      
+      if (response.ok) {
+        const data = await response.json()
+        setRecentActivity(data.activities || [])
+      } else {
+        console.error('Failed to load recent activity')
+      }
+    } catch (error) {
+      console.error('Error loading recent activity:', error)
+    } finally {
+      setActivityLoading(false)
+    }
+  }
+
+  const loadCompletedUsers = async () => {
+    if (!isAdmin && !isOwner && !userRoles.some(role => role.startsWith('manager'))) return
+    
+    setUsersLoading(true)
+    try {
+      // Get the current session token
+      const { supabase: getSupabaseClient } = await import('../../lib/supabaseClient')
+      const supabase = getSupabaseClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (!session?.access_token) {
+        console.error('No session token available')
+        return
+      }
+
+      const response = await fetch('/api/users/completed', {
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        setCompletedUsers(data.users || [])
+      } else {
+        console.error('Failed to load completed users')
+      }
+    } catch (error) {
+      console.error('Error loading completed users:', error)
+    } finally {
+      setUsersLoading(false)
+    }
+  }
+
   const handleApprove = async (invitationId: number) => {
     try {
       // Get the current session token
@@ -217,7 +322,7 @@ export default function DashboardPage() {
         return
       }
 
-      const response = await fetch('/api/admin/approve-invitation', {
+      const response = await fetch('/api/admin/approve-user', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -321,7 +426,7 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-white shadow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Mobile Layout */}
           <div className="block sm:hidden py-4">
@@ -427,8 +532,36 @@ export default function DashboardPage() {
         </div>
       </header>
 
+      {/* Breadcrumbs */}
+      <div className="fixed top-28 sm:top-24 left-0 right-0 z-40 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
+          <nav className="flex" aria-label="Breadcrumb">
+            <ol className="flex items-center space-x-4">
+              <li>
+                <div>
+                  <span className="text-gray-500">
+                    <svg className="flex-shrink-0 h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
+                    </svg>
+                    <span className="sr-only">Dashboard</span>
+                  </span>
+                </div>
+              </li>
+              <li>
+                <div className="flex items-center">
+                  <svg className="flex-shrink-0 h-5 w-5 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                  </svg>
+                  <span className="ml-4 text-sm font-medium text-gray-500">Dashboard</span>
+                </div>
+              </li>
+            </ol>
+          </nav>
+        </div>
+      </div>
+
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8 pt-40 sm:pt-36">
         <div className="px-4 py-6 sm:px-0">
           <div className="mb-8">
             <h2 className="text-3xl font-bold text-gray-900">Dashboard</h2>
@@ -493,16 +626,16 @@ export default function DashboardPage() {
                     </div>
                   </div>
                   <div className="mt-4">
-                    <button
-                      onClick={() => window.location.href = '/admin/invite'}
+                      <button
+                        onClick={() => window.location.href = '/admin/invite'}
                       className="w-full bg-green-600 text-white px-4 py-2 rounded-md text-sm hover:bg-green-700 transition-colors"
                     >
                       Send New Invitation
-                    </button>
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
 
             {/* Company Actions - Only for admin/owner/manager roles */}
             {hasCompany && canManageCompany() && (
@@ -529,9 +662,9 @@ export default function DashboardPage() {
                       Manage Company
                     </button>
                   </div>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
             {/* Create Company */}
             {!hasCompany && (
@@ -563,19 +696,52 @@ export default function DashboardPage() {
             )}
           </div>
 
+          {/* Recent Activity */}
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">Recent Activity</h2>
+            <div className="bg-white shadow rounded-lg">
+              <div className="px-6 py-4">
+                {activityLoading ? (
+                  <div className="text-center py-4">
+                    <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
+                    <p className="mt-2 text-sm text-gray-500">Loading activity...</p>
+                  </div>
+                ) : recentActivity.length > 0 ? (
+                  <div className="space-y-3">
+                    {recentActivity.map((activity, index) => (
+                      <div key={activity.id || index} className="flex items-start space-x-3">
+                        <div className="flex-shrink-0">
+                          <div className="w-2 h-2 bg-indigo-600 rounded-full mt-2"></div>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-gray-900">{activity.description}</p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {new Date(activity.created_at).toLocaleString()}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500">No recent activity</p>
+                )}
+              </div>
+            </div>
+          </div>
+
           {/* Invitation Management - Admin Only */}
           {isAdmin && (
             <div className="mb-8">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold text-gray-900">Invitation Management</h2>
-                <button
+                    <button
                   onClick={loadInvitations}
                   disabled={invitationsLoading}
                   className="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm hover:bg-indigo-700 transition-colors disabled:opacity-50"
-                >
+                    >
                   {invitationsLoading ? 'Loading...' : 'Refresh'}
-                </button>
-              </div>
+                    </button>
+                </div>
 
               {/* Summary Statistics */}
               {!invitationsLoading && invitations.length > 0 && (
@@ -678,14 +844,14 @@ export default function DashboardPage() {
                                     className="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700 transition-colors"
                                   >
                                     Approve
-                                  </button>
+                  </button>
                                   <button
                                     onClick={() => handleReject(invitation.id)}
                                     className="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700 transition-colors"
                                   >
                                     Reject
-                                  </button>
-                                </div>
+                  </button>
+                </div>
                               )}
                               
                               {/* Status Messages */}
@@ -709,26 +875,17 @@ export default function DashboardPage() {
                                   ✗ Rejected/Expired
                                 </span>
                               )}
-                            </div>
-                          </div>
+                </div>
+              </div>
                         </li>
                       ))}
                     </ul>
                   )}
-                </div>
-              )}
             </div>
+              )}
+          </div>
           )}
 
-          {/* Recent Activity */}
-          <div className="bg-white shadow rounded-lg">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-medium text-gray-900">Recent Activity</h3>
-            </div>
-            <div className="px-6 py-4">
-              <p className="text-gray-500">No recent activity to display.</p>
-            </div>
-          </div>
         </div>
       </main>
     </div>

@@ -1,6 +1,37 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 
+// Tab-specific storage utility
+const getTabId = () => {
+  let tabId = sessionStorage.getItem('tabId')
+  if (!tabId) {
+    tabId = `tab_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    sessionStorage.setItem('tabId', tabId)
+  }
+  return tabId
+}
+
+const setTabStorage = (key: string, value: string) => {
+  const tabId = getTabId()
+  sessionStorage.setItem(`${tabId}_${key}`, value)
+}
+
+const getTabStorage = (key: string) => {
+  const tabId = getTabId()
+  return sessionStorage.getItem(`${tabId}_${key}`)
+}
+
+const clearTabStorage = () => {
+  const tabId = getTabId()
+  const keys = Object.keys(sessionStorage)
+  keys.forEach(key => {
+    if (key.startsWith(`${tabId}_`)) {
+      sessionStorage.removeItem(key)
+    }
+  })
+  sessionStorage.removeItem('tabId')
+}
+
 export default function HomePage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -228,21 +259,28 @@ export default function HomePage() {
               if (session) {
                 console.log('Session set successfully, redirecting to dashboard')
                 
-                // Store role information in session storage for dashboard use
+                // Store role information in tab-specific session storage for dashboard use
                 if (result.userRoles) {
-                  sessionStorage.setItem('userRoles', JSON.stringify(result.userRoles))
+                  setTabStorage('userRoles', JSON.stringify(result.userRoles))
                 }
                 if (result.isAdmin !== undefined) {
-                  sessionStorage.setItem('isAdmin', result.isAdmin.toString())
+                  setTabStorage('isAdmin', result.isAdmin.toString())
                 }
                 if (result.isOwner !== undefined) {
-                  sessionStorage.setItem('isOwner', result.isOwner.toString())
+                  setTabStorage('isOwner', result.isOwner.toString())
                 }
                 if (result.hasCompany !== undefined) {
-                  sessionStorage.setItem('hasCompany', result.hasCompany.toString())
+                  setTabStorage('hasCompany', result.hasCompany.toString())
                 }
                 
-                window.location.href = '/dashboard'
+                // Redirect based on user role
+                if (result.isAdmin) {
+                  console.log('User is admin, redirecting to admin dashboard')
+                  window.location.href = '/admin/dashboard'
+                } else {
+                  console.log('User is not admin, redirecting to regular dashboard')
+                  window.location.href = '/dashboard'
+                }
               } else {
                 console.error('Failed to set session')
                 setMessage('Login successful but session setup failed. Please try again.')
@@ -270,6 +308,87 @@ export default function HomePage() {
           return
         } else if (inviteData.invitation.status === 'email_confirmed' && !inviteData.invitation.admin_approved_at) {
           setMessage('Your account is waiting for admin approval. Please contact your administrator to approve your account.')
+          return
+        } else if (inviteData.invitation.status === 'admin_approved') {
+          // User has been approved by admin, now try to authenticate with Supabase
+          console.log('User has been approved by admin, attempting Supabase authentication...')
+          
+          // Import the shared Supabase client
+          const { supabase: getSupabaseClient } = await import('../lib/supabaseClient')
+          const supabase = getSupabaseClient()
+          
+          const { data, error } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+          })
+
+          console.log('Sign in response:', error ? 'Error' : 'Success')
+          console.log('Sign in result:', error ? error.message : 'User logged in')
+
+          if (error) {
+            if (error.message.includes('Email not confirmed')) {
+              setMessage('Please check your email and click the confirmation link before logging in. If you need a new confirmation email, try registering again.')
+            } else if (error.message.includes('Invalid login credentials')) {
+              setAccountExists(true)
+              setMessage('The password you entered is incorrect. Please try again or use the "Reset Password" button below if you forgot your password.')
+            } else if (error.message.includes('User not found') || error.message.includes('Invalid email')) {
+              setAccountExists(false)
+              setMessage('No account exists for this email address. Please contact your manager or the assetTRAC Admin to request an invitation.')
+            } else {
+              setAccountExists(false)
+              setMessage(`Login error: ${error.message}`)
+            }
+          } else {
+            // Successful login - set session storage and redirect to dashboard
+            console.log('Login successful! Setting session storage and redirecting to dashboard...')
+            
+            // Update invitation status to completed and record login timestamp
+            try {
+              const updateResponse = await fetch('/api/invite/update-status', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ 
+                  email,
+                  status: 'completed',
+                  completed_at: new Date().toISOString()
+                })
+              })
+              
+              if (updateResponse.ok) {
+                console.log('Invitation status updated to completed')
+                
+                // Log the completion activity
+                try {
+                  const { logActivity, ActivityTypes } = await import('../lib/activityLogger')
+                  await logActivity({
+                    user_email: email,
+                    action: ActivityTypes.INVITATION_COMPLETED,
+                    description: `User completed invitation process and logged in for the first time`,
+                    metadata: {
+                      user_email: email,
+                      completed_at: new Date().toISOString()
+                    }
+                  })
+                } catch (logError) {
+                  console.error('Error logging completion activity:', logError)
+                }
+              } else {
+                console.error('Failed to update invitation status')
+              }
+            } catch (updateError) {
+              console.error('Error updating invitation status:', updateError)
+            }
+            
+            // Set session storage for owner
+            setTabStorage('isAdmin', 'false')
+            setTabStorage('isOwner', 'true')
+            setTabStorage('hasCompany', 'true')
+            setTabStorage('userRoles', JSON.stringify(['owner']))
+            
+            window.location.href = '/dashboard'
+          }
           return
         } else if (inviteData.invitation.status === 'completed') {
           // User has completed the invitation process, now try to authenticate with Supabase
@@ -303,8 +422,54 @@ export default function HomePage() {
               setMessage(`Login error: ${error.message}`)
             }
           } else {
-            // Successful login - redirect to dashboard
-            console.log('Login successful! Redirecting to dashboard...')
+            // Successful login - set session storage and redirect to dashboard
+            console.log('Login successful! Setting session storage and redirecting to dashboard...')
+            
+            // Record login timestamp for completed users
+            try {
+              const updateResponse = await fetch('/api/invite/update-status', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ 
+                  email,
+                  status: 'completed',
+                  completed_at: new Date().toISOString()
+                })
+              })
+              
+              if (updateResponse.ok) {
+                console.log('Login timestamp recorded for completed user')
+                
+                // Log the login activity
+                try {
+                  const { logActivity, ActivityTypes } = await import('../lib/activityLogger')
+                  await logActivity({
+                    user_email: email,
+                    action: ActivityTypes.USER_LOGIN,
+                    description: `User logged in successfully`,
+                    metadata: {
+                      user_email: email,
+                      login_at: new Date().toISOString()
+                    }
+                  })
+                } catch (logError) {
+                  console.error('Error logging login activity:', logError)
+                }
+              } else {
+                console.error('Failed to record login timestamp')
+              }
+            } catch (updateError) {
+              console.error('Error recording login timestamp:', updateError)
+            }
+            
+            // Set session storage for owner
+            setTabStorage('isAdmin', 'false')
+            setTabStorage('isOwner', 'true')
+            setTabStorage('hasCompany', 'true')
+            setTabStorage('userRoles', JSON.stringify(['owner']))
+            
             window.location.href = '/dashboard'
           }
         } else {

@@ -7,13 +7,24 @@ assetTRAC is a comprehensive asset management system designed for Small and Medi
 **Repository**: GitHub assetTRAC  
 **Current Status**: Development phase with core authentication and invitation system implemented
 
-## ⚠️ IMPORTANT: Project Cleanliness
-**DO NOT** add test files, debug files, or temporary folders to this project. All test files should be:
-- Created outside the project directory
-- Deleted immediately after testing
-- Never committed to version control
+## ⚠️ CRITICAL: Project Cleanliness Policy
+**NEVER** add test files, debug files, temporary folders, or troubleshooting files to this project. 
 
-This project should maintain a clean, production-ready structure at all times.
+### Strict Rules:
+- ❌ **NO** `.sql` files for testing
+- ❌ **NO** `test-*` folders or files
+- ❌ **NO** `debug-*` folders or files  
+- ❌ **NO** temporary API endpoints for testing
+- ❌ **NO** sample data files
+- ❌ **NO** troubleshooting scripts
+
+### What to do instead:
+- Create test files **OUTSIDE** the project directory
+- Use Supabase SQL Editor directly for database testing
+- Delete any temporary files immediately after use
+- Keep the project clean and production-ready at all times
+
+**This policy is NON-NEGOTIABLE and must be followed strictly.**
 
 ## Technology Stack
 - **Frontend**: Next.js 13+ with TypeScript
@@ -243,6 +254,7 @@ const canEditCompany = () => {
 - approved_by: uuid (nullable)
 - approved_at: timestamp with time zone (nullable)
 - email_verified: boolean (default: FALSE)
+- last_login_at: timestamp with time zone (nullable)
 - created_at: timestamp with time zone (default: now())
 - updated_at: timestamp with time zone (default: now())
 ```
@@ -309,7 +321,52 @@ const canEditCompany = () => {
 - completed_at: timestamp with time zone (nullable)
 ```
 
-#### 6. `admin_notifications`
+#### 6. `activity_logs` ✅ **ACTIVE**
+```sql
+- id: uuid (Primary Key, default: gen_random_uuid())
+- user_id: uuid (nullable, references auth.users.id)
+- user_email: text (NOT NULL)
+- company_id: uuid (nullable, references companies.id) -- For company-specific activities
+- action: text (NOT NULL) -- 'user_approved', 'user_login', 'invitation_sent', 'invitation_accepted', 'invitation_completed', etc.
+- description: text (NOT NULL) -- Human-readable description
+- metadata: jsonb (nullable) -- Additional data about the event
+- created_at: timestamp with time zone (default: now())
+```
+
+**Usage**: This table stores system activity logs for audit trails and dashboard display. Activities are logged via `lib/activityLogger.ts` and displayed in the Recent Activity section of dashboards. Sample data includes invitation events, user approvals, and completion activities.
+
+**Event Tracking & Filtering System**:
+
+**Event Tracking (Who Initiates Each Event)**:
+| Event | Who Gets Credit | Where Logged |
+|-------|----------------|--------------|
+| **Company Created** | Person creating company | `pages/api/company/create/index.ts` |
+| **Invitation Sent** | Person sending invite | `pages/api/send-invite-email/index.ts` |
+| **Invitation Accepted** | Person accepting invite | `pages/api/invite/accept/index.ts` |
+| **User Approved** | Admin approving user | `pages/api/admin/approve-user/index.ts` |
+| **Invitation Completed** | Person completing process | `pages/index.tsx` |
+| **User Login** | Person logging in | `pages/index.tsx` |
+
+**Dashboard Filtering (Who Sees What)**:
+| Role | What They See in "Recent Activity" |
+|------|-----------------------------------|
+| **Admin** | 🔍 **All Events** (except user logins) - Can see everything |
+| **Owner** | 👤 **Only Own Events** - Just their personal actions |
+| **Manager** | 👤 **Only Own Events** - Just their personal actions |
+| **Viewer/Tech** | 👤 **Only Own Events** - Just their personal actions |
+
+**How It Works**:
+1. **Event Logging**: Every action logs the `user_email` of who performed it
+2. **Database Storage**: Events stored in `activity_logs` table with proper initiator tracking
+3. **Role-Based Filtering**: Each dashboard filters events based on user's role and email
+4. **Personal Privacy**: Non-admin users only see their own activities
+
+**Example Scenarios**:
+- **Admin Dashboard**: Sees all events (invitation sent, user approved, company created) except user logins
+- **Owner Dashboard**: Sees only their own events (company created, invitations they sent) but not admin approvals
+- **Manager/Viewer/Tech**: See only their personal activities
+
+#### 7. `admin_notifications`
 ```sql
 - id: integer (Primary Key, auto-increment)
 - type: text (NOT NULL)
@@ -335,7 +392,8 @@ const canEditCompany = () => {
 2. **`invites` table**: Uses `uuid` for `id` instead of `serial`, has additional fields like `accepted`
 3. **`assets` table**: Uses `type` instead of `category`, `cost` instead of `purchase_price`
 4. **`companies` table**: Missing `description` and `website` fields, has address fields split into `street`, `city`, `state`, `zip`
-5. **Additional tables**: `admin_notifications` and `user_roles` exist in current implementation
+5. **Additional tables**: `admin_notifications`, `user_roles`, and `activity_logs` exist in current implementation
+6. **`activity_logs` table**: ✅ **ACTIVE** - Stores system activity logs for audit trails and dashboard display
 
 #### Foreign Key Relationships:
 - `company_users.company_id` → `companies.id`
@@ -362,7 +420,7 @@ const canEditCompany = () => {
 
 ### Admin Functions
 - `GET /api/admin/invitations` - List all invitations (admin only)
-- `POST /api/admin/approve-invitation` - Approve user invitation
+- `POST /api/admin/approve-user` - Approve user invitation
 - `POST /api/admin/reject-invitation` - Reject user invitation
 
 ### Invitation System

@@ -164,6 +164,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       console.log('Accept invite API: Session link generated successfully')
     }
 
+    // Log the invitation acceptance activity
+    try {
+      await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/activity/log`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_id: userData.user.id,
+          user_email: invitation.invited_email,
+          company_id: invitation.company_id,
+          action: 'INVITATION_ACCEPTED',
+          description: `User accepted invitation for ${invitation.role} role`,
+          metadata: {
+            invited_email: invitation.invited_email,
+            role: invitation.role,
+            company_name: invitation.company_name,
+            company_id: invitation.company_id,
+            invitation_id: invitation.id
+          }
+        })
+      })
+    } catch (logError) {
+      console.error('Error logging invitation acceptance activity:', logError)
+      // Don't fail the request if logging fails
+    }
+
     // Determine user roles and company status for session
     const roles = [invitation.role || 'user']
     const isAdmin = roles.includes('admin')

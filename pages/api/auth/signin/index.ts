@@ -20,6 +20,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'Email and password are required' })
   }
 
+
   try {
     // First check if user exists
     console.log('Signin API: Checking if user exists for email:', email)
@@ -49,11 +50,65 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ message: 'User not found' })
     }
 
-    // For now, let's skip the profile check entirely and just allow all existing users to login
-    // We'll only block users who explicitly have is_approved: false
-    console.log('Signin API: Skipping profile check for now - allowing all existing users to login')
+    // First check if this is an admin user - admins always get access
+    const { data: companyUser, error: companyUserError } = await supabase
+      .from('company_users')
+      .select('role')
+      .eq('user_id', user.id)
+      .single()
+
+    const isAdmin = !companyUserError && companyUser && companyUser.role === 'admin'
     
-    // TODO: Re-implement profile check once we understand the table structure better
+    if (isAdmin) {
+      console.log('Signin API: User is admin, bypassing approval check')
+    } else {
+      // Check if user is approved by admin
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('is_approved')
+        .eq('email', email)
+        .single()
+
+      if (profileError) {
+        console.log('Signin API: Profile error:', profileError)
+        // If profile doesn't exist, check if this is an invitation-based user
+        // by looking for an invitation record
+        const { data: invitation, error: inviteError } = await supabase
+          .from('invites')
+          .select('status')
+          .eq('invited_email', email)
+          .single()
+
+        if (!inviteError && invitation) {
+          console.log('Signin API: Found invitation, status:', invitation.status)
+          if (invitation.status === 'email_confirmed') {
+            return res.status(400).json({ message: 'Your account is waiting for admin approval. Please contact your administrator for assistance.' })
+          } else if (invitation.status === 'admin_approved') {
+            console.log('Signin API: User is approved, allowing login')
+            // Allow login for approved users
+          } else if (invitation.status === 'completed') {
+            console.log('Signin API: User is completed, allowing login')
+            // Allow login for completed users
+          } else {
+            console.log('Signin API: Unknown invitation status:', invitation.status, 'allowing login')
+            // Allow login for any other status
+          }
+        } else {
+          // No profile and no invitation - this is an existing admin/owner account
+          console.log('Signin API: No profile or invitation found, allowing login for existing account')
+        }
+        
+        // TEMPORARY: Allow login for cmatt777@comcast.net regardless of status
+        if (email === 'cmatt777@comcast.net') {
+          console.log('Signin API: TEMPORARY BYPASS for cmatt777@comcast.net')
+        }
+      } else {
+        console.log('Signin API: Profile found, is_approved:', profile.is_approved)
+        if (profile.is_approved === false) {
+          return res.status(400).json({ message: 'Your account is waiting for admin approval. Please contact your administrator for assistance.' })
+        }
+      }
+    }
 
     // User exists and is approved, now try to sign in
     console.log('Signin API: User exists and is approved, attempting sign in...')
@@ -78,11 +133,34 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     console.log('Signin API: Sign in successful')
     
+    // Check if this is a first login for an approved user and update invitation status
+    const { data: invitation, error: inviteError } = await supabase
+      .from('invites')
+      .select('id, status')
+      .eq('invited_email', email)
+      .eq('status', 'admin_approved')
+      .single()
+
+    if (!inviteError && invitation) {
+      console.log('Signin API: First login detected, marking invitation as completed')
+      // Update invitation status to completed
+      await supabase
+        .from('invites')
+        .update({
+          status: 'completed',
+          completed_at: new Date().toISOString()
+        })
+        .eq('id', invitation.id)
+    }
+    
     // Fetch user's role information from the database
     const { data: companyUsers, error: roleError } = await supabase
       .from('company_users')
       .select('role, companies(*)')
       .eq('user_id', data.user.id)
+
+    console.log('Signin API: Company users query result:', { companyUsers, roleError })
+    console.log('Signin API: User ID:', data.user.id)
 
     if (roleError) {
       console.error('Signin API: Error fetching user roles:', roleError)
@@ -90,16 +168,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Determine user roles
     const roles = companyUsers?.map(cu => cu.role) || []
-    const isAdmin = roles.includes('admin')
+    const userIsAdmin = roles.includes('admin')
     const isOwner = roles.includes('owner')
     const hasCompany = companyUsers && companyUsers.length > 0
+
+    console.log('Signin API: Role analysis:', {
+      userEmail: email,
+      roles,
+      userIsAdmin,
+      isOwner,
+      hasCompany,
+      companyUsers
+    })
 
     // Update user metadata with role information
     const { error: updateError } = await supabase.auth.admin.updateUserById(data.user.id, {
       user_metadata: {
         ...data.user.user_metadata,
         roles: roles,
-        isAdmin: isAdmin,
+        isAdmin: userIsAdmin,
         isOwner: isOwner,
         hasCompany: hasCompany
       }
@@ -121,7 +208,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       user: data.user, 
       session: data.session,
       userRoles: roles,
-      isAdmin,
+      isAdmin: userIsAdmin,
       isOwner,
       hasCompany
     })

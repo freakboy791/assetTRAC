@@ -118,71 +118,70 @@ export default function CompanySettingsPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow">
-        <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-          {/* Breadcrumbs */}
-          <nav className="flex mb-4" aria-label="Breadcrumb">
-            <ol className="flex items-center space-x-4">
-              <li>
-                <div>
-                  <button
-                    onClick={() => window.location.href = '/dashboard'}
-                    className="text-gray-400 hover:text-gray-500"
-                  >
-                    <svg className="flex-shrink-0 h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
-                    </svg>
-                    <span className="sr-only">Dashboard</span>
-                  </button>
-                </div>
-              </li>
-              <li>
-                <div className="flex items-center">
-                  <svg className="flex-shrink-0 h-5 w-5 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                  </svg>
-                  <span className="ml-4 text-sm font-medium text-gray-500">Company Settings</span>
-                </div>
-              </li>
-            </ol>
-          </nav>
-
+      <header className="fixed top-0 left-0 right-0 z-50 bg-white shadow">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Mobile Layout */}
           <div className="block sm:hidden py-4">
-            <div className="mb-4">
-              <h1 className="text-xl font-bold text-gray-900">Company Settings</h1>
-              <p className="mt-1 text-xs text-gray-500">Manage your company information and settings</p>
-            </div>
-            <div className="flex flex-col space-y-2">
-              <button
-                onClick={() => window.location.href = '/dashboard'}
-                className="bg-gray-600 text-white px-3 py-1.5 rounded-md text-xs hover:bg-gray-700 transition-colors self-start"
-              >
-                Back to Dashboard
-              </button>
-              <button
-                onClick={() => {
-                  const { supabase: getSupabaseClient } = require('../../../lib/supabaseClient')
-                  const supabase = getSupabaseClient()
-                  supabase.auth.signOut()
-                  window.location.href = '/'
-                }}
-                className="bg-red-600 text-white px-3 py-1.5 rounded-md text-xs hover:bg-red-700 transition-colors self-start"
-              >
-                Sign Out
-              </button>
+            <div className="flex justify-between items-start">
+              <div className="flex flex-col space-y-1">
+                <div className="flex items-center">
+                  <div className="h-6 w-6 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full flex items-center justify-center mr-2">
+                    <span className="text-xs font-bold text-white">AT</span>
+                  </div>
+                  <h1 className="text-lg font-bold text-gray-900">assetTRAC</h1>
+                </div>
+                <span className="text-xs text-gray-700 truncate">
+                  Welcome, {user?.user_metadata?.first_name || user?.first_name || user?.email}
+                </span>
+                <div className="flex items-center space-x-2">
+                  <span className="text-xs text-gray-500">Role:</span>
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                    Admin
+                  </span>
+                </div>
+              </div>
+              <div className="flex flex-col items-end space-y-2">
+                <button
+                  onClick={() => {
+                    const { supabase: getSupabaseClient } = require('../../../lib/supabaseClient')
+                    const supabase = getSupabaseClient()
+                    supabase.auth.signOut()
+                    window.location.href = '/'
+                  }}
+                  className="bg-red-600 text-white px-4 py-2 rounded-md text-sm hover:bg-red-700 transition-colors"
+                >
+                  Sign Out
+                </button>
+                <button
+                  onClick={() => window.location.href = '/admin/dashboard'}
+                  className="bg-gray-600 text-white px-3 py-1.5 rounded-md text-xs hover:bg-gray-700 transition-colors"
+                >
+                  Back to Dashboard
+                </button>
+              </div>
             </div>
           </div>
           
           {/* Desktop Layout */}
-          <div className="hidden sm:flex justify-between items-center">
+          <div className="hidden sm:flex justify-between items-center py-6">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Company Settings</h1>
               <p className="mt-1 text-sm text-gray-500">Manage your company information and settings</p>
             </div>
             <div className="flex items-center space-x-4">
+              <div className="flex flex-col items-end">
+                <span className="text-sm text-gray-700">
+                  Welcome, {user?.user_metadata?.first_name || user?.first_name || user?.email}
+                </span>
+                <div className="flex items-center space-x-2 mt-1">
+                  <span className="text-xs text-gray-500">Role:</span>
+                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                    Admin
+                  </span>
+                </div>
+              </div>
               <button
-                onClick={() => window.location.href = '/dashboard'}
+                onClick={() => window.location.href = '/admin/dashboard'}
                 className="bg-gray-600 text-white px-4 py-2 rounded-md text-sm hover:bg-gray-700 transition-colors"
               >
                 Back to Dashboard
@@ -203,8 +202,39 @@ export default function CompanySettingsPage() {
         </div>
       </header>
 
+      {/* Breadcrumbs */}
+      <div className="fixed top-28 sm:top-24 left-0 right-0 z-40 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
+          <nav className="flex" aria-label="Breadcrumb">
+            <ol className="flex items-center space-x-4">
+              <li>
+                <div>
+                  <button
+                    onClick={() => window.location.href = '/admin/dashboard'}
+                    className="text-gray-400 hover:text-gray-500"
+                  >
+                    <svg className="flex-shrink-0 h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
+                    </svg>
+                    <span className="sr-only">Dashboard</span>
+                  </button>
+                </div>
+              </li>
+              <li>
+                <div className="flex items-center">
+                  <svg className="flex-shrink-0 h-5 w-5 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                  </svg>
+                  <span className="ml-4 text-sm font-medium text-gray-500">Company Settings</span>
+                </div>
+              </li>
+            </ol>
+          </nav>
+        </div>
+      </div>
+
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8 pt-40 sm:pt-36">
         <div className="px-4 py-6 sm:px-0">
           <div className="bg-white shadow rounded-lg">
             <div className="px-6 py-4 border-b border-gray-200">

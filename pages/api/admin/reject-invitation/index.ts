@@ -29,15 +29,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(401).json({ error: 'Invalid token' })
     }
 
-    // Get user's company_id from company_users table
+    // Get user's company_id and role from company_users table
     const { data: companyUser, error: companyUserError } = await supabaseClient
       .from('company_users')
-      .select('company_id')
+      .select('company_id, role')
       .eq('user_id', user.id)
       .single()
 
     if (companyUserError || !companyUser?.company_id) {
       return res.status(400).json({ error: 'User not associated with a company' })
+    }
+
+    // Check if user has permission to reject invitations (admin, owner, or manager)
+    const userRole = companyUser.role
+    const canRejectInvitations = userRole === 'admin' || userRole === 'owner' || userRole.startsWith('manager')
+
+    if (!canRejectInvitations) {
+      console.log('User does not have permission to reject invitations:', { userRole })
+      return res.status(403).json({ error: 'Insufficient permissions to reject invitations' })
     }
 
     // Verify the invitation belongs to the user's company

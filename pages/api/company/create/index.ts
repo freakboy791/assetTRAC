@@ -108,6 +108,32 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     console.log('Company-user association created successfully')
 
+    // Log the company creation activity
+    try {
+      await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/activity/log`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_id: userData.user.id,
+          user_email: userData.user.email || 'unknown',
+          company_id: company.id,
+          action: 'COMPANY_CREATED',
+          description: `Company "${company.name}" created successfully`,
+          metadata: {
+            company_name: company.name,
+            company_id: company.id,
+            user_email: userData.user.email,
+            role: 'owner'
+          }
+        })
+      })
+    } catch (logError) {
+      console.error('Error logging company creation activity:', logError)
+      // Don't fail the request if logging fails
+    }
+
     return res.status(200).json({ 
       success: true, 
       company: company,

@@ -132,6 +132,39 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       console.log('Email sending failed, but invitation record was created')
     }
 
+    // Log the invitation activity
+    try {
+      // Get the admin user's email from the authorization token
+      let adminEmail = 'system'
+      if (req.headers.authorization) {
+        const token = req.headers.authorization.replace('Bearer ', '')
+        const { data: { user: adminUser } } = await supabase.auth.getUser(token)
+        if (adminUser?.email) {
+          adminEmail = adminUser.email
+        }
+      }
+      
+      await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/activity/log`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_email: adminEmail,
+          action: 'INVITATION_SENT',
+          description: `Invitation sent to ${email} for ${role} role`,
+          metadata: {
+            invited_email: email,
+            role: role,
+            company_name: companyName,
+            invitation_id: inviteRecord.id
+          }
+        })
+      })
+    } catch (logError) {
+      console.error('Error logging invitation activity:', logError)
+    }
+
     res.status(200).json({
       success: true,
       message: `Invitation created successfully for ${email}`,

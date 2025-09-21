@@ -2,6 +2,37 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Invitation } from '../../types'
 
+// Tab-specific storage utility
+const getTabId = () => {
+  let tabId = sessionStorage.getItem('tabId')
+  if (!tabId) {
+    tabId = `tab_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    sessionStorage.setItem('tabId', tabId)
+  }
+  return tabId
+}
+
+const setTabStorage = (key: string, value: string) => {
+  const tabId = getTabId()
+  sessionStorage.setItem(`${tabId}_${key}`, value)
+}
+
+const getTabStorage = (key: string) => {
+  const tabId = getTabId()
+  return sessionStorage.getItem(`${tabId}_${key}`)
+}
+
+const clearTabStorage = () => {
+  const tabId = getTabId()
+  const keys = Object.keys(sessionStorage)
+  keys.forEach(key => {
+    if (key.startsWith(`${tabId}_`)) {
+      sessionStorage.removeItem(key)
+    }
+  })
+  sessionStorage.removeItem('tabId')
+}
+
 export default function AuthPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -24,7 +55,13 @@ export default function AuthPage() {
         const data = await response.json()
         
         if (data.user) {
-          window.location.href = '/dashboard'
+          // Check if user is admin and redirect accordingly
+          const isAdmin = sessionStorage.getItem('isAdmin') === 'true'
+          if (isAdmin) {
+            window.location.href = '/admin/dashboard'
+          } else {
+            window.location.href = '/dashboard'
+          }
         }
       } catch (error) {
         // Silently handle errors
@@ -74,6 +111,8 @@ export default function AuthPage() {
   }, [])
 
   const handleLogIn = async () => {
+    console.log('Login form: handleLogIn called with email:', email)
+    
     if (!email || !password) {
       setMessage('Please fill in all fields')
       return
@@ -84,6 +123,7 @@ export default function AuthPage() {
     setErrorType('none')
 
     try {
+      console.log('Login form: Making API call to /api/auth/signin')
       // Try to sign in via API
       const response = await fetch('/api/auth/signin', {
         method: 'POST',
@@ -178,8 +218,26 @@ export default function AuthPage() {
           setMessage(`Login error: ${result.message}`)
         }
       } else {
-        // Successful login - redirect to dashboard
-        window.location.href = '/dashboard'
+        // Successful login - check user role and redirect accordingly
+        console.log('Auth: Login successful, result:', result)
+        console.log('Auth: isAdmin:', result.isAdmin)
+        console.log('Auth: userRoles:', result.userRoles)
+        
+        if (result.isAdmin) {
+          // Store admin status in tab-specific session storage
+          console.log('Auth: User is admin, redirecting to admin dashboard')
+          setTabStorage('isAdmin', 'true')
+          setTabStorage('userRoles', JSON.stringify(result.userRoles || []))
+          window.location.href = '/admin/dashboard'
+        } else {
+          // Store user role information in tab-specific session storage
+          console.log('Auth: User is not admin, redirecting to regular dashboard')
+          setTabStorage('isAdmin', 'false')
+          setTabStorage('isOwner', result.isOwner ? 'true' : 'false')
+          setTabStorage('hasCompany', result.hasCompany ? 'true' : 'false')
+          setTabStorage('userRoles', JSON.stringify(result.userRoles || []))
+          window.location.href = '/dashboard'
+        }
       }
     } catch (error) {
       setErrorType('generic')
@@ -505,7 +563,14 @@ export default function AuthPage() {
             <div className="space-y-3">
               <button
                 type="button"
-                onClick={isFromInvitation ? handleSignUp : handleLogIn}
+                onClick={() => {
+                  console.log('Login button clicked, isFromInvitation:', isFromInvitation)
+                  if (isFromInvitation) {
+                    handleSignUp()
+                  } else {
+                    handleLogIn()
+                  }
+                }}
                 disabled={loading}
                 className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >

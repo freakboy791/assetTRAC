@@ -207,7 +207,9 @@ export default function JoinPage() {
               Complete Your Registration
             </h2>
             <p className="mt-2 text-center text-sm text-gray-600">
-              Welcome to assetTRAC! You've been invited by {invitation?.company_name} Please set up your password to complete your account.
+              Welcome to assetTRAC!<br />
+              You've been invited by {invitation?.company_name}.<br />
+              Please enter a new password to complete your account.
             </p>
           </div>
         

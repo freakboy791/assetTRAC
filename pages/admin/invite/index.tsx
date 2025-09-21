@@ -1,6 +1,37 @@
 import { useState, useEffect } from 'react'
 import { Invitation } from '../../../types'
 
+// Tab-specific storage utility
+const getTabId = () => {
+  let tabId = sessionStorage.getItem('tabId')
+  if (!tabId) {
+    tabId = `tab_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    sessionStorage.setItem('tabId', tabId)
+  }
+  return tabId
+}
+
+const setTabStorage = (key: string, value: string) => {
+  const tabId = getTabId()
+  sessionStorage.setItem(`${tabId}_${key}`, value)
+}
+
+const getTabStorage = (key: string) => {
+  const tabId = getTabId()
+  return sessionStorage.getItem(`${tabId}_${key}`)
+}
+
+const clearTabStorage = () => {
+  const tabId = getTabId()
+  const keys = Object.keys(sessionStorage)
+  keys.forEach(key => {
+    if (key.startsWith(`${tabId}_`)) {
+      sessionStorage.removeItem(key)
+    }
+  })
+  sessionStorage.removeItem('tabId')
+}
+
 export default function AdminInvitePage() {
   const [invitedEmail, setInvitedEmail] = useState('')
   const [companyName, setCompanyName] = useState('')
@@ -81,9 +112,9 @@ export default function AdminInvitePage() {
 
         setUser(session.user)
 
-        // Get role information from session storage
-        const storedRoles = sessionStorage.getItem('userRoles')
-        const storedIsAdmin = sessionStorage.getItem('isAdmin')
+        // Get role information from tab-specific session storage
+        const storedRoles = getTabStorage('userRoles')
+        const storedIsAdmin = getTabStorage('isAdmin')
         
         let roles: string[] = []
         let isAdminRole = false
@@ -206,12 +237,21 @@ export default function AdminInvitePage() {
     }
   }
 
-  if (!isAdmin) {
+  // Check if user has permission to send invitations
+  const canSendInvitations = isAdmin || userRoles.includes('owner') || userRoles.some(role => role.startsWith('manager'))
+  
+  if (!canSendInvitations) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">Access Denied</h1>
+          <p className="text-gray-600 mb-8">You don't have permission to send invitations.</p>
+          <button
+            onClick={() => window.location.href = '/dashboard'}
+            className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors"
+          >
+            Return to Dashboard
+          </button>
         </div>
       </div>
     )
@@ -220,15 +260,135 @@ export default function AdminInvitePage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow">
-        <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-          {/* Breadcrumbs */}
-          <nav className="flex mb-2" aria-label="Breadcrumb">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-white shadow">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* Mobile Layout */}
+          <div className="block sm:hidden py-4">
+            <div className="flex justify-between items-start">
+              <div className="flex flex-col space-y-1">
+                <div className="flex items-center">
+                  <div className="h-6 w-6 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full flex items-center justify-center mr-2">
+                    <span className="text-xs font-bold text-white">AT</span>
+                  </div>
+                  <h1 className="text-lg font-bold text-gray-900">assetTRAC Admin</h1>
+                </div>
+                <span className="text-xs text-gray-700 truncate">
+                  Welcome, {user?.user_metadata?.first_name || user?.first_name || user?.email}
+                </span>
+                <div className="flex items-center space-x-2">
+                  <span className="text-xs text-gray-500">Role:</span>
+                  <div className="flex flex-wrap gap-1">
+                    {userRoles.map((role, index) => (
+                      <span
+                        key={index}
+                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                          role === 'admin' 
+                            ? 'bg-purple-100 text-purple-800' 
+                            : role === 'owner'
+                            ? 'bg-green-100 text-green-800'
+                            : role.startsWith('manager')
+                            ? 'bg-orange-100 text-orange-800'
+                            : role === 'tech'
+                            ? 'bg-blue-100 text-blue-800'
+                            : role.startsWith('viewer')
+                            ? 'bg-gray-100 text-gray-800'
+                            : 'bg-blue-100 text-blue-800'
+                        }`}
+                      >
+                        {role.includes('-') 
+                          ? role.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
+                          : role.charAt(0).toUpperCase() + role.slice(1)
+                        }
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="flex flex-col items-end space-y-2">
+                <button
+                  onClick={handleSignOut}
+                  className="bg-red-600 text-white px-4 py-2 rounded-md text-sm hover:bg-red-700 transition-colors"
+                >
+                  Sign Out
+                </button>
+                <button
+                  onClick={() => window.location.href = isAdmin ? '/admin/dashboard' : '/dashboard'}
+                  className="bg-gray-600 text-white px-3 py-1.5 rounded-md text-xs hover:bg-gray-700 transition-colors"
+                >
+                  Back to Dashboard
+                </button>
+              </div>
+            </div>
+          </div>
+          
+          {/* Desktop Layout */}
+          <div className="hidden sm:flex justify-between items-center py-6">
+            <div className="flex items-center">
+              <div className="h-8 w-8 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full flex items-center justify-center mr-3">
+                <span className="text-sm font-bold text-white">AT</span>
+              </div>
+              <h1 className="text-2xl font-bold text-gray-900">assetTRAC Admin</h1>
+            </div>
+            <div className="flex items-center space-x-4">
+              <div className="flex flex-col items-end">
+                <span className="text-sm text-gray-700">
+                  Welcome, {user?.user_metadata?.first_name || user?.first_name || user?.email}
+                </span>
+                <div className="flex items-center space-x-2 mt-1">
+                  <span className="text-xs text-gray-500">Role:</span>
+                  <div className="flex space-x-1">
+                    {userRoles.map((role, index) => (
+                      <span
+                        key={index}
+                        className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                          role === 'admin' 
+                            ? 'bg-purple-100 text-purple-800' 
+                            : role === 'owner'
+                            ? 'bg-green-100 text-green-800'
+                            : role.startsWith('manager')
+                            ? 'bg-orange-100 text-orange-800'
+                            : role === 'tech'
+                            ? 'bg-blue-100 text-blue-800'
+                            : role.startsWith('viewer')
+                            ? 'bg-gray-100 text-gray-800'
+                            : 'bg-blue-100 text-blue-800'
+                        }`}
+                      >
+                        {role.includes('-') 
+                          ? role.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
+                          : role.charAt(0).toUpperCase() + role.slice(1)
+                        }
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => window.location.href = isAdmin ? '/admin/dashboard' : '/dashboard'}
+                className="bg-gray-600 text-white px-4 py-2 rounded-md text-sm hover:bg-gray-700 transition-colors"
+              >
+                Back to Dashboard
+              </button>
+              <button
+                onClick={handleSignOut}
+                className="bg-red-600 text-white px-4 py-2 rounded-md text-sm hover:bg-red-700 transition-colors"
+              >
+                Sign Out
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Breadcrumbs */}
+      <div className="fixed top-28 sm:top-24 left-0 right-0 z-40 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
+          <nav className="flex" aria-label="Breadcrumb">
             <ol className="flex items-center space-x-4">
               <li>
                 <div>
                   <button
-                    onClick={() => window.location.href = '/dashboard'}
+                    onClick={() => window.location.href = '/admin/dashboard'}
                     className="text-gray-400 hover:text-gray-500"
                   >
                     <svg className="flex-shrink-0 h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
@@ -248,62 +408,11 @@ export default function AdminInvitePage() {
               </li>
             </ol>
           </nav>
-
-          {/* Mobile Layout */}
-          <div className="block sm:hidden py-4">
-            <div className="flex justify-between items-center mb-3">
-              <div className="flex items-center">
-                <div className="h-6 w-6 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full flex items-center justify-center mr-2">
-                  <span className="text-xs font-bold text-white">AT</span>
-                </div>
-                <h1 className="text-lg font-bold text-gray-900">assetTRAC Admin</h1>
-              </div>
-              <button
-                onClick={handleSignOut}
-                className="bg-red-600 text-white px-4 py-2 rounded-md text-sm hover:bg-red-700 transition-colors"
-              >
-                Sign Out
-              </button>
-            </div>
-            <div className="flex flex-col space-y-2">
-              <button
-                onClick={() => window.location.href = '/dashboard'}
-                className="bg-gray-600 text-white px-3 py-1.5 rounded-md text-xs hover:bg-gray-700 transition-colors self-start"
-              >
-                Back to Dashboard
-              </button>
-            </div>
-          </div>
-          
-          {/* Desktop Layout */}
-          <div className="hidden sm:flex justify-between items-center py-6">
-            <div className="flex items-center">
-              <div className="h-8 w-8 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full flex items-center justify-center mr-3">
-                <span className="text-sm font-bold text-white">AT</span>
-              </div>
-              <h1 className="text-2xl font-bold text-gray-900">assetTRAC Admin</h1>
-            </div>
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={() => window.location.href = '/dashboard'}
-                className="bg-gray-600 text-white px-4 py-2 rounded-md text-sm hover:bg-gray-700 transition-colors"
-              >
-                Back to Dashboard
-              </button>
-              <button
-                onClick={handleSignOut}
-                className="bg-red-600 text-white px-4 py-2 rounded-md text-sm hover:bg-red-700 transition-colors"
-              >
-                Sign Out
-              </button>
-            </div>
-          </div>
         </div>
-      </header>
-
+      </div>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8 pt-40 sm:pt-36">
         <div className="px-4 py-6 sm:px-0">
           <div className="max-w-2xl mx-auto">
             <div className="bg-white shadow rounded-lg">

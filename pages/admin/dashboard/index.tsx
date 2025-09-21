@@ -1,83 +1,339 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { Invitation } from '../../../types'
 
-interface Invitation {
-  id: string
-  invited_email: string
-  company_name: string
-  role: string
-  status: string
-  created_at: string
-  email_confirmed_at: string | null
-  admin_approved_at: string | null
-  message: string | null
+// Tab-specific storage utility
+const getTabId = () => {
+  let tabId = sessionStorage.getItem('tabId')
+  if (!tabId) {
+    tabId = `tab_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    sessionStorage.setItem('tabId', tabId)
+  }
+  return tabId
+}
+
+const setTabStorage = (key: string, value: string) => {
+  const tabId = getTabId()
+  sessionStorage.setItem(`${tabId}_${key}`, value)
+}
+
+const getTabStorage = (key: string) => {
+  const tabId = getTabId()
+  return sessionStorage.getItem(`${tabId}_${key}`)
+}
+
+const clearTabStorage = () => {
+  const tabId = getTabId()
+  const keys = Object.keys(sessionStorage)
+  keys.forEach(key => {
+    if (key.startsWith(`${tabId}_`)) {
+      sessionStorage.removeItem(key)
+    }
+  })
+  sessionStorage.removeItem('tabId')
 }
 
 export default function AdminDashboard() {
-  const [invitations, setInvitations] = useState<Invitation[]>([])
-  const [loading, setLoading] = useState(true)
   const [user, setUser] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [isOwner, setIsOwner] = useState(false)
+  const [hasCompany, setHasCompany] = useState(false)
+  const [userRoles, setUserRoles] = useState<string[]>([])
+  const [invitations, setInvitations] = useState<Invitation[]>([])
+  const [invitationsLoading, setInvitationsLoading] = useState(false)
+  const [companyData, setCompanyData] = useState<any>(null)
+  const [recentActivity, setRecentActivity] = useState<any[]>([])
+  const [completedUsers, setCompletedUsers] = useState<any[]>([])
+  const [activityLoading, setActivityLoading] = useState(false)
+  const [usersLoading, setUsersLoading] = useState(false)
 
   useEffect(() => {
     const checkUser = async () => {
+      console.log('Admin Dashboard: Checking user authentication...')
       try {
+        // Import the shared Supabase client
         const { supabase: getSupabaseClient } = await import('../../../lib/supabaseClient')
         const supabase = getSupabaseClient()
         
         const { data: { session }, error } = await supabase.auth.getSession()
+        console.log('Admin Dashboard: Session check result:', error ? 'Error' : 'Success')
+        console.log('Admin Dashboard: Session data:', session ? 'Session found' : 'No session')
         
-        if (error || !session?.user) {
+        if (!session?.user) {
+          console.log('Admin Dashboard: No user found, redirecting to home')
           window.location.href = '/'
           return
         }
 
+        console.log('Admin Dashboard: User found:', session.user.email)
         setUser(session.user)
-        
-        // Check if user is admin
-        const storedIsAdmin = sessionStorage.getItem('isAdmin')
-        const isAdminRole = storedIsAdmin === 'true'
-        setIsAdmin(isAdminRole)
 
-        if (!isAdminRole) {
-          window.location.href = '/dashboard'
+        // Check if user is approved by admin
+        try {
+          const approvalResponse = await fetch('/api/auth/getUser', {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${session.access_token}`
+            }
+          })
+          
+          const approvalData = await approvalResponse.json()
+          console.log('Admin Dashboard: Admin approval check result:', approvalData)
+          console.log('Admin Dashboard: isAdmin from API:', approvalData.isAdmin)
+          
+          // Allow admins to bypass approval check
+          if (!approvalData.isApproved && !approvalData.isAdmin) {
+            console.log('Admin Dashboard: User not approved and not admin, redirecting to login')
+            // Sign out the user
+            await supabase.auth.signOut()
+            sessionStorage.clear()
+            localStorage.clear()
+            window.location.href = '/auth?message=Your account is waiting for admin approval. Please contact your administrator to approve your account.'
+            return
+          }
+
+        } catch (approvalError) {
+          console.error('Admin Dashboard: Error checking admin approval:', approvalError)
+          // If we can't check approval, assume not approved for safety
+          await supabase.auth.signOut()
+          sessionStorage.clear()
+          localStorage.clear()
+          window.location.href = '/auth?message=Your account is waiting for admin approval. Please contact your administrator to approve your account.'
           return
         }
 
-        // Load invitations
-        await loadInvitations()
-      } catch (error) {
-        console.error('Error checking user:', error)
-        window.location.href = '/'
-      } finally {
+        // Get role information from tab-specific session storage (set during login)
+        const storedRoles = getTabStorage('userRoles')
+        const storedIsAdmin = getTabStorage('isAdmin')
+        const storedIsOwner = getTabStorage('isOwner')
+        const storedHasCompany = getTabStorage('hasCompany')
+        
+        console.log('Admin Dashboard: Session storage values:', {
+          storedRoles,
+          storedIsAdmin,
+          storedIsOwner,
+          storedHasCompany
+        })
+
+        let roles: string[] = []
+        let isOwnerRole = false
+        let hasCompanyData = false
+        let isAdminRole = false
+
+        if (storedRoles) {
+          roles = JSON.parse(storedRoles)
+          isOwnerRole = storedIsOwner === 'true'
+          hasCompanyData = storedHasCompany === 'true'
+          isAdminRole = storedIsAdmin === 'true'
+        } else {
+          // Fallback: check user metadata if session storage is empty
+          const userMetadata = session.user.user_metadata
+          roles = userMetadata?.roles || []
+          isOwnerRole = userMetadata?.isOwner || false
+          hasCompanyData = userMetadata?.hasCompany || false
+          isAdminRole = userMetadata?.isAdmin || false
+        }
+
+        setUserRoles(roles)
+        setIsAdmin(isAdminRole)
+        setIsOwner(isOwnerRole)
+        setHasCompany(hasCompanyData)
+        
+        console.log('Admin Dashboard: Role detection - isAdminRole:', isAdminRole, 'isOwnerRole:', isOwnerRole, 'roles:', roles)
+
+        // If owner but no company, check database to be sure
+        if (isOwnerRole && !hasCompanyData) {
+          console.log('Admin Dashboard: Owner with no company in session storage, checking database...')
+          
+          // Check if user actually has a company in the database
+          const { data: companyUsers, error: companyError } = await supabase
+              .from('company_users')
+              .select('company_id')
+            .eq('user_id', session.user.id)
+            .limit(1)
+          
+          if (companyError) {
+            console.error('Admin Dashboard: Error checking company association:', companyError)
+          } else if (companyUsers && companyUsers.length > 0) {
+            console.log('Admin Dashboard: User has company in database, updating session storage')
+            setTabStorage('hasCompany', 'true')
+              setHasCompany(true)
+            } else {
+            console.log('Admin Dashboard: Owner with no company, redirecting to company creation')
+              window.location.href = '/company/create'
+              return
+            }
+          }
+
+        // Load invitations if user is admin
+        if (isAdminRole) {
+          console.log('Admin Dashboard: User is admin, loading invitations...')
+          await loadInvitations()
+        }
+        
+        // Load recent activity for all users
+        await loadRecentActivity()
+        
+        // Load completed users if user has permission
+        if (isAdminRole || isOwner || userRoles.some(role => role.startsWith('manager'))) {
+          await loadCompletedUsers()
+        }
+
+        // Load company data for viewer/tech roles to show company recap
+        if (hasCompanyData && (roles.includes('viewer') || roles.includes('tech'))) {
+          console.log('Admin Dashboard: Loading company data for viewer/tech role...')
+          await loadCompanyData()
+        }
+
+        console.log('Admin Dashboard: Setting loading to false')
         setLoading(false)
+      } catch (error) {
+        console.error('Admin Dashboard: Error checking user:', error)
+        window.location.href = '/'
       }
     }
 
     checkUser()
   }, [])
 
-  const loadInvitations = async () => {
+  const handleSignOut = async () => {
     try {
-      const response = await fetch('/api/admin/invitations')
-      const data = await response.json()
-      
-      if (data.invitations) {
-        setInvitations(data.invitations)
-      }
-    } catch (error) {
-      console.error('Error loading invitations:', error)
-    }
-  }
-
-  const handleApprove = async (invitationId: string) => {
-    try {
+      // Import the shared Supabase client
       const { supabase: getSupabaseClient } = await import('../../../lib/supabaseClient')
       const supabase = getSupabaseClient()
       
+      await supabase.auth.signOut()
+      window.location.href = '/'
+    } catch (error) {
+      console.error('Error signing out:', error)
+      // Still redirect even if signout fails
+      window.location.href = '/'
+    }
+  }
+
+  const loadCompanyData = async () => {
+    try {
+      const response = await fetch('/api/company/get')
+      const data = await response.json()
+      
+      if (data.company) {
+        setCompanyData(data.company)
+      }
+    } catch (error) {
+      console.error('Error loading company data:', error)
+    }
+  }
+
+  const loadInvitations = async () => {
+    try {
+      setInvitationsLoading(true)
+      
+      // Get the current session token
+      const { supabase: getSupabaseClient } = await import('../../../lib/supabaseClient')
+      const supabase = getSupabaseClient()
       const { data: { session } } = await supabase.auth.getSession()
+      
       if (!session?.access_token) {
-        alert('No valid session found')
+        console.error('No session token available')
+        return
+      }
+
+      const response = await fetch('/api/admin/invitations', {
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      })
+      const data = await response.json()
+
+      if (data.error) {
+        console.error('Error from API:', data.error)
+        return
+      }
+
+      setInvitations(data.invitations || [])
+    } catch (error) {
+      console.error('Error loading invitations:', error)
+    } finally {
+      setInvitationsLoading(false)
+    }
+  }
+
+  const loadRecentActivity = async () => {
+    setActivityLoading(true)
+    try {
+      // Get current user info for role-based filtering
+      const userEmail = user?.email || ''
+      const storedRoles = getTabStorage('userRoles')
+      const userRolesFromStorage = storedRoles ? JSON.parse(storedRoles) : []
+      const userRolesString = JSON.stringify(userRolesFromStorage)
+      
+      console.log('Admin Dashboard: Loading recent activity with:', {
+        userEmail,
+        userRoles: userRolesFromStorage,
+        userRolesString,
+        storedRoles
+      })
+      
+      const response = await fetch(`/api/activity/log?limit=10&user_email=${encodeURIComponent(userEmail)}&user_roles=${encodeURIComponent(userRolesString)}`)
+      
+      if (response.ok) {
+        const data = await response.json()
+        console.log('Admin Dashboard: Activity API response:', data)
+        setRecentActivity(data.activities || [])
+      } else {
+        console.error('Failed to load recent activity:', response.status, response.statusText)
+      }
+    } catch (error) {
+      console.error('Error loading recent activity:', error)
+    } finally {
+      setActivityLoading(false)
+    }
+  }
+
+  const loadCompletedUsers = async () => {
+    if (!isAdmin && !isOwner && !userRoles.some(role => role.startsWith('manager'))) return
+    
+    setUsersLoading(true)
+    try {
+      // Get the current session token
+      const { supabase: getSupabaseClient } = await import('../../../lib/supabaseClient')
+      const supabase = getSupabaseClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (!session?.access_token) {
+        console.error('No session token available')
+        return
+      }
+
+      const response = await fetch('/api/users/completed', {
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        setCompletedUsers(data.users || [])
+      } else {
+        console.error('Failed to load completed users')
+      }
+    } catch (error) {
+      console.error('Error loading completed users:', error)
+    } finally {
+      setUsersLoading(false)
+    }
+  }
+
+  const handleApprove = async (invitationId: number) => {
+    try {
+      // Get the current session token
+      const { supabase: getSupabaseClient } = await import('../../../lib/supabaseClient')
+      const supabase = getSupabaseClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (!session?.access_token) {
+        console.error('No session token available')
         return
       }
 
@@ -87,46 +343,88 @@ export default function AdminDashboard() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`
         },
-        body: JSON.stringify({ invitationId })
+        body: JSON.stringify({ invitationId }),
       })
 
-      const data = await response.json()
-      
-      if (data.success) {
-        // Reload invitations
-        await loadInvitations()
-      } else {
-        alert('Error approving user: ' + data.message)
+      if (!response.ok) {
+        return
       }
+
+      // Reload invitations
+      loadInvitations()
     } catch (error) {
-      console.error('Error approving user:', error)
-      alert('Error approving user')
+      console.error('Error approving invitation:', error)
     }
   }
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Pending</span>
-      case 'email_confirmed':
-        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">Awaiting Approval</span>
-      case 'admin_approved':
-        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Approved</span>
-      case 'completed':
-        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Completed</span>
-      default:
-        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">{status}</span>
+  const handleReject = async (invitationId: number) => {
+    try {
+      // Get the current session token
+      const { supabase: getSupabaseClient } = await import('../../../lib/supabaseClient')
+      const supabase = getSupabaseClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (!session?.access_token) {
+        console.error('No session token available')
+        return
+      }
+
+      const response = await fetch('/api/admin/reject-invitation', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ invitationId }),
+      })
+
+      if (!response.ok) {
+        return
+      }
+
+      // Reload invitations
+      loadInvitations()
+    } catch (error) {
+      console.error('Error rejecting invitation:', error)
     }
   }
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
+  const getUserActivationStatus = (invitation: Invitation) => {
+    if (invitation.status === 'pending') {
+      return { text: 'Not Activated', color: 'bg-yellow-100 text-yellow-800' }
+    } else if (invitation.email_confirmed_at) {
+      return { text: 'Activated', color: 'bg-green-100 text-green-800' }
+    } else if (invitation.status === 'completed') {
+      return { text: 'Activated', color: 'bg-green-100 text-green-800' }
+    } else {
+      return { text: 'Unknown', color: 'bg-gray-100 text-gray-800' }
+    }
+  }
+
+  const getAdminApprovalStatus = (invitation: Invitation) => {
+    if (invitation.admin_approved_at) {
+      return { text: 'Approved', color: 'bg-green-100 text-green-800' }
+    } else if (invitation.status === 'email_confirmed') {
+      return { text: 'Unapproved', color: 'bg-red-100 text-red-800' }
+    } else if (invitation.status === 'completed') {
+      return { text: 'Approved', color: 'bg-green-100 text-green-800' }
+    } else if (invitation.status === 'pending') {
+      return { text: 'Unapproved', color: 'bg-red-100 text-red-800' }
+    } else if (invitation.status === 'expired') {
+      return { text: 'Rejected', color: 'bg-red-100 text-red-800' }
+    } else {
+      return { text: 'Unknown', color: 'bg-gray-100 text-gray-800' }
+    }
+  }
+
+  // Helper function to check if user can manage company
+  const canManageCompany = () => {
+    return userRoles.includes('admin') || userRoles.includes('owner') || userRoles.some(role => role.startsWith('manager'))
+  }
+
+  // Helper function to check if user should see company recap
+  const shouldShowCompanyRecap = () => {
+    return userRoles.some(role => role.startsWith('viewer')) || userRoles.includes('tech')
   }
 
   if (loading) {
@@ -140,102 +438,509 @@ export default function AdminDashboard() {
     )
   }
 
-  if (!isAdmin) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-red-600 mb-4">Access Denied</h2>
-          <p className="text-gray-600 mb-4">You do not have permission to access this page.</p>
-          <Link href="/dashboard" className="text-indigo-600 hover:text-indigo-500">
-            Return to Dashboard
-          </Link>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-white shadow">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-white shadow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
+          {/* Mobile Layout */}
+          <div className="block sm:hidden py-4">
+            <div className="flex justify-between items-center mb-3">
+              <div className="flex items-center">
+                <div className="h-6 w-6 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full flex items-center justify-center mr-2">
+                  <span className="text-xs font-bold text-white">AT</span>
+                </div>
+                <h1 className="text-lg font-bold text-gray-900">assetTRAC</h1>
+              </div>
+              <button
+                onClick={handleSignOut}
+                className="bg-red-600 text-white px-4 py-2 rounded-md text-sm hover:bg-red-700 transition-colors"
+              >
+                Sign Out
+              </button>
+            </div>
+            <div className="flex flex-col space-y-2">
+              <span className="text-xs text-gray-700 truncate">
+                Welcome, {user?.user_metadata?.first_name || user?.first_name || user?.email}
+              </span>
+              {userRoles.length > 0 && (
+                <div className="flex items-center space-x-2">
+                  <span className="text-xs text-gray-500">Role:</span>
+                  <div className="flex flex-wrap gap-1">
+                    {userRoles.map((role, index) => (
+                      <span
+                        key={index}
+                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                          role === 'admin' 
+                            ? 'bg-purple-100 text-purple-800' 
+                            : role === 'owner'
+                            ? 'bg-green-100 text-green-800'
+                            : role.startsWith('manager')
+                            ? 'bg-orange-100 text-orange-800'
+                            : role === 'tech'
+                            ? 'bg-blue-100 text-blue-800'
+                            : role.startsWith('viewer')
+                            ? 'bg-gray-100 text-gray-800'
+                            : 'bg-blue-100 text-blue-800'
+                        }`}
+                      >
+                        {role.includes('-') 
+                          ? role.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
+                          : role.charAt(0).toUpperCase() + role.slice(1)
+                        }
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+          
+          {/* Desktop Layout */}
+          <div className="hidden sm:flex justify-between items-center py-6">
             <div className="flex items-center">
-              <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
+              <div className="h-8 w-8 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full flex items-center justify-center mr-3">
+                <span className="text-sm font-bold text-white">AT</span>
+              </div>
+              <h1 className="text-2xl font-bold text-gray-900">assetTRAC</h1>
             </div>
             <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-500">Welcome, {user?.email}</span>
+              <div className="flex flex-col items-end">
+                <span className="text-sm text-gray-700">
+                  Welcome, {user?.user_metadata?.first_name || user?.first_name || user?.email}
+                </span>
+                {userRoles.length > 0 && (
+                  <div className="flex items-center space-x-2 mt-1">
+                    <span className="text-xs text-gray-500">Role:</span>
+                    <div className="flex space-x-1">
+                      {userRoles.map((role, index) => (
+                        <span
+                          key={index}
+                          className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                            role === 'admin' 
+                              ? 'bg-purple-100 text-purple-800' 
+                              : role === 'owner'
+                              ? 'bg-green-100 text-green-800'
+                              : role.startsWith('manager')
+                              ? 'bg-orange-100 text-orange-800'
+                              : role === 'tech'
+                              ? 'bg-blue-100 text-blue-800'
+                              : role.startsWith('viewer')
+                              ? 'bg-gray-100 text-gray-800'
+                              : 'bg-blue-100 text-blue-800'
+                          }`}
+                        >
+                          {role.includes('-') 
+                            ? role.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
+                            : role.charAt(0).toUpperCase() + role.slice(1)
+                          }
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
               <button
-                onClick={() => {
-                  const { supabase: getSupabaseClient } = require('../../../lib/supabaseClient')
-                  const supabase = getSupabaseClient()
-                  supabase.auth.signOut()
-                  window.location.href = '/'
-                }}
-                className="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700"
+                onClick={handleSignOut}
+                className="bg-red-600 text-white px-4 py-2 rounded-md text-sm hover:bg-red-700 transition-colors"
               >
                 Sign Out
               </button>
             </div>
           </div>
         </div>
+      </header>
+
+      {/* Breadcrumbs */}
+      <div className="fixed top-32 sm:top-24 left-0 right-0 z-40 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
+          <nav className="flex" aria-label="Breadcrumb">
+            <ol className="flex items-center space-x-4">
+              <li>
+                <div>
+                  <span className="text-gray-500">
+                    <svg className="flex-shrink-0 h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
+                    </svg>
+                    <span className="sr-only">Dashboard</span>
+                  </span>
+                </div>
+              </li>
+              <li>
+                <div className="flex items-center">
+                  <svg className="flex-shrink-0 h-5 w-5 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                  </svg>
+                  <span className="ml-4 text-sm font-medium text-gray-500">Admin Dashboard</span>
+                </div>
+              </li>
+            </ol>
+          </nav>
+        </div>
       </div>
 
-      <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8 pt-44 sm:pt-36">
         <div className="px-4 py-6 sm:px-0">
-          <div className="bg-white shadow rounded-lg">
-            <div className="px-4 py-5 sm:p-6">
-              <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
-                Pending Invitations
-              </h3>
-              
-              {invitations.length === 0 ? (
-                <p className="text-gray-500">No invitations found.</p>
-              ) : (
-                <div className="space-y-4">
-                  {invitations.map((invitation) => (
-                    <div key={invitation.id} className="bg-white border border-gray-200 rounded-lg p-4">
-                      <div className="grid grid-cols-6 gap-4 items-center">
-                        <div className="col-span-2">
-                          <div className="text-sm font-medium text-gray-900">{invitation.invited_email}</div>
-                          <div className="text-sm text-gray-500">{invitation.company_name}</div>
-                        </div>
-                        <div className="col-span-1">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                            {invitation.role}
-                          </span>
-                        </div>
-                        <div className="col-span-1">
-                          {getStatusBadge(invitation.status)}
-                        </div>
-                        <div className="col-span-1">
-                          <div className="text-sm text-gray-500">{formatDate(invitation.created_at)}</div>
-                        </div>
-                        <div className="col-span-1">
-                          {invitation.status === 'email_confirmed' && (
-                            <button
-                              onClick={() => handleApprove(invitation.id)}
-                              className="text-indigo-600 hover:text-indigo-900 bg-indigo-100 hover:bg-indigo-200 px-3 py-1 rounded-md"
-                            >
-                              Approve
-                            </button>
-                          )}
-                          {invitation.status === 'admin_approved' && (
-                            <span className="text-green-600">Approved</span>
-                          )}
-                          {invitation.status === 'pending' && (
-                            <span className="text-gray-400">-</span>
-                          )}
-                        </div>
+          <div className="mb-8">
+            <h2 className="text-3xl font-bold text-gray-900">Admin Dashboard</h2>
+            <p className="mt-2 text-gray-600">Welcome to your assetTRAC admin dashboard</p>
+          </div>
+
+          {/* Company Recap for Viewer/Tech Roles */}
+          {shouldShowCompanyRecap() && companyData && (
+            <div className="mb-8">
+              <div className="bg-white shadow rounded-lg">
+                <div className="px-6 py-4 border-b border-gray-200">
+                  <h3 className="text-lg font-medium text-gray-900">Company Information</h3>
+                </div>
+                <div className="px-6 py-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-500">Company Name</h4>
+                      <p className="mt-1 text-sm text-gray-900">{companyData.name}</p>
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-500">Email</h4>
+                      <p className="mt-1 text-sm text-gray-900">{companyData.email}</p>
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-500">Phone</h4>
+                      <p className="mt-1 text-sm text-gray-900">{companyData.phone}</p>
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-500">Address</h4>
+                      <p className="mt-1 text-sm text-gray-900">
+                        {companyData.street && (
+                          <span>{companyData.street}<br /></span>
+                        )}
+                        {companyData.city && companyData.state && companyData.zip && (
+                          <span>{companyData.city}, {companyData.state} {companyData.zip}</span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Quick Actions */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+            {/* Admin/Owner/Manager Actions - Send Invitation */}
+            {(isAdmin || isOwner || userRoles.some(role => role.startsWith('manager'))) && (
+              <div className="bg-white overflow-hidden shadow rounded-lg">
+                <div className="p-6">
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0">
+                      <div className="w-8 h-8 bg-green-100 rounded-md flex items-center justify-center">
+                        <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
                       </div>
                     </div>
-                  ))}
+                    <div className="ml-4">
+                      <h3 className="text-lg font-medium text-gray-900">Send Invitation</h3>
+                      <p className="text-sm text-gray-500">Invite new users to your organization</p>
+                    </div>
+                  </div>
+                  <div className="mt-4">
+                      <button
+                        onClick={() => window.location.href = '/admin/invite'}
+                      className="w-full bg-green-600 text-white px-4 py-2 rounded-md text-sm hover:bg-green-700 transition-colors"
+                    >
+                      Send New Invitation
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+            {/* Company Actions - Only for admin/owner/manager roles */}
+            {hasCompany && canManageCompany() && (
+              <div className="bg-white overflow-hidden shadow rounded-lg">
+                <div className="p-6">
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0">
+                      <div className="w-8 h-8 bg-blue-100 rounded-md flex items-center justify-center">
+                        <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                        </svg>
+                      </div>
+                    </div>
+                    <div className="ml-4">
+                      <h3 className="text-lg font-medium text-gray-900">Company Management</h3>
+                      <p className="text-sm text-gray-500">Manage your company settings</p>
+                    </div>
+                  </div>
+                  <div className="mt-4">
+                    <button
+                      onClick={() => window.location.href = '/company/manage'}
+                      className="w-full bg-blue-600 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-700 transition-colors"
+                    >
+                      Manage Company
+                    </button>
+                  </div>
+                  </div>
+                </div>
+              )}
+
+            {/* Create Company */}
+            {!hasCompany && (
+              <div className="bg-white overflow-hidden shadow rounded-lg">
+                <div className="p-6">
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0">
+                      <div className="w-8 h-8 bg-yellow-100 rounded-md flex items-center justify-center">
+                        <svg className="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                        </svg>
+                      </div>
+                    </div>
+                    <div className="ml-4">
+                      <h3 className="text-lg font-medium text-gray-900">Create Company</h3>
+                      <p className="text-sm text-gray-500">Set up your company profile</p>
+                    </div>
+                  </div>
+                  <div className="mt-4">
+                    <button
+                      onClick={() => window.location.href = '/company/create'}
+                      className="w-full bg-yellow-600 text-white px-4 py-2 rounded-md text-sm hover:bg-yellow-700 transition-colors"
+                    >
+                      Create Company
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Manage Users - Admin/Owner/Manager Only */}
+            {(() => {
+              const shouldShow = isAdmin || isOwner || userRoles.some(role => role.startsWith('manager'))
+              console.log('Admin Dashboard: Manage Users tile visibility - isAdmin:', isAdmin, 'isOwner:', isOwner, 'userRoles:', userRoles, 'shouldShow:', shouldShow)
+              return shouldShow
+            })() && (
+              <div className="bg-white overflow-hidden shadow rounded-lg">
+                <div className="p-6">
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0">
+                      <div className="w-8 h-8 bg-purple-100 rounded-md flex items-center justify-center">
+                        <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
+                      </div>
+                    </div>
+                    <div className="ml-4">
+                      <h3 className="text-lg font-medium text-gray-900">Manage Users</h3>
+                      <p className="text-sm text-gray-500">View and manage completed users</p>
+                    </div>
+                  </div>
+                  <div className="mt-4">
+                    <button
+                      onClick={() => window.location.href = '/admin/users'}
+                      className="w-full bg-purple-600 text-white px-4 py-2 rounded-md text-sm hover:bg-purple-700 transition-colors"
+                    >
+                      View All Users
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Recent Activity */}
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">Recent Activity</h2>
+            <div className="bg-white shadow rounded-lg">
+              <div className="px-6 py-4">
+                {activityLoading ? (
+                  <div className="text-center py-4">
+                    <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
+                    <p className="mt-2 text-sm text-gray-500">Loading activity...</p>
+                  </div>
+                ) : recentActivity.length > 0 ? (
+                  <div className="space-y-3">
+                    {recentActivity.map((activity, index) => (
+                      <div key={activity.id || index} className="flex items-start space-x-3">
+                        <div className="flex-shrink-0">
+                          <div className="w-2 h-2 bg-indigo-600 rounded-full mt-2"></div>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-gray-900">{activity.description}</p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {new Date(activity.created_at).toLocaleString()}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500">No recent activity</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+
+          {/* Invitation Management - Admin Only */}
+          {isAdmin && (
+            <div className="mb-8">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-gray-900">Invitation Management</h2>
+                    <button
+                  onClick={loadInvitations}
+                  disabled={invitationsLoading}
+                  className="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                    >
+                  {invitationsLoading ? 'Loading...' : 'Refresh'}
+                  </button>
+                </div>
+
+              {/* Summary Statistics */}
+              {!invitationsLoading && invitations.length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                  <div className="bg-white p-4 rounded-lg shadow">
+                    <div className="text-2xl font-bold text-gray-900">
+                      {invitations.filter(inv => inv.status === 'pending').length}
+                    </div>
+                    <div className="text-sm text-gray-600">Pending Activation</div>
+                  </div>
+                  <div className="bg-white p-4 rounded-lg shadow">
+                    <div className="text-2xl font-bold text-yellow-600">
+                      {invitations.filter(inv => (inv.status === 'pending' || inv.status === 'email_confirmed') && !inv.admin_approved_at).length}
+                    </div>
+                    <div className="text-sm text-gray-600">Awaiting Approval</div>
+                  </div>
+                  <div className="bg-white p-4 rounded-lg shadow">
+                    <div className="text-2xl font-bold text-green-600">
+                      {invitations.filter(inv => inv.admin_approved_at && inv.status !== 'completed').length}
+                    </div>
+                    <div className="text-sm text-gray-600">Approved</div>
+                  </div>
+                  <div className="bg-white p-4 rounded-lg shadow">
+                    <div className="text-2xl font-bold text-purple-600">
+                      {invitations.filter(inv => inv.status === 'completed' && inv.admin_approved_at).length}
+                    </div>
+                    <div className="text-sm text-gray-600">Completed</div>
+                  </div>
+                </div>
+              )}
+
+              {invitationsLoading ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
+                  <p className="mt-2 text-gray-600">Loading invitations...</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {invitations.filter(invitation => invitation.status !== 'completed').length === 0 ? (
+                    <div className="text-center py-8">
+                      <p className="text-gray-500">No invitations in progress.</p>
+                    </div>
+                  ) : (
+                    <ul className="space-y-4">
+                      {invitations.filter(invitation => invitation.status !== 'completed').map((invitation) => (
+                        <li key={invitation.id} className="px-6 py-4 bg-white border border-gray-200 rounded-lg shadow-sm">
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center justify-between">
+                                <p className="text-sm font-medium text-gray-900">
+                                  {invitation.invited_email}
+                                </p>
+                                <div className="flex items-center space-x-2">
+                                  <span className="text-xs text-gray-500">Role: {invitation.role}</span>
+                                </div>
+                              </div>
+                              <p className="text-sm text-gray-500">
+                                Company: {invitation.company_name}
+                              </p>
+                              
+                              {/* Status Indicators */}
+                              <div className="flex items-center space-x-4 mt-2">
+                                <div className="flex items-center space-x-2">
+                                  <span className="text-xs text-gray-600 font-medium">User Activation:</span>
+                                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getUserActivationStatus(invitation).color}`}>
+                                    {getUserActivationStatus(invitation).text}
+                                  </span>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <span className="text-xs text-gray-600 font-medium">Admin Approval:</span>
+                                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getAdminApprovalStatus(invitation).color}`}>
+                                    {getAdminApprovalStatus(invitation).text}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Timestamps */}
+                              <div className="flex items-center space-x-4 mt-2 text-xs text-gray-400">
+                                <span>Created: {new Date(invitation.created_at).toLocaleDateString()}</span>
+                                {invitation.email_confirmed_at && (
+                                  <span>Activated: {new Date(invitation.email_confirmed_at).toLocaleDateString()}</span>
+                                )}
+                                {invitation.admin_approved_at && (
+                                  <span>Approved: {new Date(invitation.admin_approved_at).toLocaleDateString()}</span>
+                                )}
+                              </div>
+
+                              {invitation.message && (
+                                <p className="text-sm text-gray-500 mt-2">
+                                  Message: {invitation.message}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex flex-col items-end space-y-2">
+                              {/* Action Buttons */}
+                              {invitation.status === 'email_confirmed' && !invitation.admin_approved_at && (
+                                <div className="flex items-center space-x-2">
+                                  <button
+                                    onClick={() => handleApprove(invitation.id)}
+                                    className="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700 transition-colors"
+                                  >
+                                    Approve
+                  </button>
+                                  <button
+                                    onClick={() => handleReject(invitation.id)}
+                                    className="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700 transition-colors"
+                                  >
+                                    Reject
+                  </button>
+                </div>
+                              )}
+                              
+                              {/* Status Messages */}
+                              {invitation.status === 'pending' && (
+                                <span className="text-sm text-gray-500 text-right">
+                                  Waiting for user to activate
+                                </span>
+                              )}
+                              {invitation.admin_approved_at && invitation.status !== 'completed' && (
+                                <span className="text-sm text-green-600 text-right">
+                                  Approved - waiting for user completion
+                                </span>
+                              )}
+                              {invitation.status === 'completed' && invitation.admin_approved_at && (
+                                <span className="text-sm text-purple-600 text-right">
+                                  ✓ Completed
+                                </span>
+                              )}
+                              {invitation.status === 'expired' && (
+                                <span className="text-sm text-red-600 text-right">
+                                  ✗ Rejected/Expired
+                                </span>
+                              )}
+                </div>
+              </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               )}
             </div>
-          </div>
+          )}
+
         </div>
-      </div>
+      </main>
     </div>
   )
 }

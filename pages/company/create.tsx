@@ -409,8 +409,39 @@ export default function CreateCompanyPage() {
           </div>
         </header>
 
+        {/* Breadcrumbs */}
+        <div className="fixed top-28 sm:top-24 left-0 right-0 z-40 bg-white">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
+            <nav className="flex" aria-label="Breadcrumb">
+              <ol className="flex items-center space-x-4">
+                <li>
+                  <div>
+                    <button
+                      onClick={() => window.location.href = '/dashboard'}
+                      className="text-gray-400 hover:text-gray-500"
+                    >
+                      <svg className="flex-shrink-0 h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
+                      </svg>
+                      <span className="sr-only">Dashboard</span>
+                    </button>
+                  </div>
+                </li>
+                <li>
+                  <div className="flex items-center">
+                    <svg className="flex-shrink-0 h-5 w-5 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                    </svg>
+                    <span className="ml-4 text-sm font-medium text-gray-500">Create Company</span>
+                  </div>
+                </li>
+              </ol>
+            </nav>
+          </div>
+        </div>
+
         {/* Main Content */}
-        <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8 pt-40 sm:pt-36">
           <div className="px-4 py-6 sm:px-0">
             <div className="max-w-2xl mx-auto">
               <div className="bg-white shadow rounded-lg">
@@ -439,7 +470,7 @@ export default function CreateCompanyPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-white shadow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Mobile Layout */}
           <div className="block sm:hidden py-4">
@@ -527,8 +558,39 @@ export default function CreateCompanyPage() {
         </div>
       </header>
 
+      {/* Breadcrumbs */}
+      <div className="fixed top-28 sm:top-24 left-0 right-0 z-40 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
+          <nav className="flex" aria-label="Breadcrumb">
+            <ol className="flex items-center space-x-4">
+              <li>
+                <div>
+                  <button
+                    onClick={() => window.location.href = '/dashboard'}
+                    className="text-gray-400 hover:text-gray-500"
+                  >
+                    <svg className="flex-shrink-0 h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
+                    </svg>
+                    <span className="sr-only">Dashboard</span>
+                  </button>
+                </div>
+              </li>
+              <li>
+                <div className="flex items-center">
+                  <svg className="flex-shrink-0 h-5 w-5 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                  </svg>
+                  <span className="ml-4 text-sm font-medium text-gray-500">Create Company</span>
+                </div>
+              </li>
+            </ol>
+          </nav>
+        </div>
+      </div>
+
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8 pt-40 sm:pt-36">
         <div className="px-4 py-6 sm:px-0">
           <div className="max-w-2xl mx-auto">
             <div className="bg-white shadow rounded-lg">

@@ -30,6 +30,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     console.log('Admin invitations API: User authenticated:', user.email)
 
+    // Check if user has permission to view invitations (admin, owner, or manager)
+    const { data: companyUser, error: companyUserError } = await supabaseClient
+      .from('company_users')
+      .select('role')
+      .eq('user_id', user.id)
+      .single()
+
+    if (companyUserError || !companyUser) {
+      console.log('User role check failed:', { companyUserError, companyUser })
+      return res.status(403).json({ error: 'User not found in company' })
+    }
+
+    const userRole = companyUser.role
+    const canViewInvitations = userRole === 'admin' || userRole === 'owner' || userRole.startsWith('manager')
+
+    if (!canViewInvitations) {
+      console.log('User does not have permission to view invitations:', { userRole })
+      return res.status(403).json({ error: 'Insufficient permissions to view invitations' })
+    }
+
     // For now, let's try to get the first company (similar to other APIs)
     // This is a temporary solution until we have proper user-company associations
     console.log('Admin invitations API: Getting first company (temporary solution)')
