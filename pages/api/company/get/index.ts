@@ -29,6 +29,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(401).json({ error: 'Invalid token' })
     }
 
+    console.log('Company Get API: User ID:', user.id)
+    console.log('Company Get API: User email:', user.email)
+
     // Get the company associated with this user through company_users table
     const { data: companyUsers, error: companyUsersError } = await supabase
       .from('company_users')
@@ -49,6 +52,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         )
       `)
       .eq('user_id', user.id)
+
+    console.log('Company Get API: Company users query result:', { companyUsers, companyUsersError })
 
     if (companyUsersError) {
       console.log('Error fetching user company:', companyUsersError)

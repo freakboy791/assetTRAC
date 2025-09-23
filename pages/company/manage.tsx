@@ -1,35 +1,36 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 
-// Tab-specific storage utility
-const getTabId = () => {
-  let tabId = sessionStorage.getItem('tabId')
-  if (!tabId) {
-    tabId = `tab_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    sessionStorage.setItem('tabId', tabId)
+// Window-specific storage utility using localStorage with unique window ID
+const getWindowId = () => {
+  let windowId = localStorage.getItem('windowId')
+  if (!windowId) {
+    // Create a unique window identifier using performance.now() for better uniqueness
+    windowId = `win_${Date.now()}_${performance.now()}_${Math.random().toString(36).substr(2, 9)}`
+    localStorage.setItem('windowId', windowId)
   }
-  return tabId
+  return windowId
 }
 
 const setTabStorage = (key: string, value: string) => {
-  const tabId = getTabId()
-  sessionStorage.setItem(`${tabId}_${key}`, value)
+  const windowId = getWindowId()
+  localStorage.setItem(`${windowId}_${key}`, value)
 }
 
 const getTabStorage = (key: string) => {
-  const tabId = getTabId()
-  return sessionStorage.getItem(`${tabId}_${key}`)
+  const windowId = getWindowId()
+  return localStorage.getItem(`${windowId}_${key}`)
 }
 
 const clearTabStorage = () => {
-  const tabId = getTabId()
-  const keys = Object.keys(sessionStorage)
+  const windowId = getWindowId()
+  const keys = Object.keys(localStorage)
   keys.forEach(key => {
-    if (key.startsWith(`${tabId}_`)) {
-      sessionStorage.removeItem(key)
+    if (key.startsWith(`${windowId}_`)) {
+      localStorage.removeItem(key)
     }
   })
-  sessionStorage.removeItem('tabId')
+  localStorage.removeItem('windowId')
 }
 
 export default function CompanyManagePage() {
@@ -112,12 +113,19 @@ export default function CompanyManagePage() {
       // Get the session to get the access token
       const { supabase: getSupabaseClient } = await import('../../lib/supabaseClient')
       const supabase = getSupabaseClient()
-      const { data: { session } } = await supabase.auth.getSession()
       
-      if (!session?.access_token) {
-        setMessage('No valid session found')
+      // Force a fresh session check to ensure we have the right user
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      
+      if (sessionError || !session?.access_token) {
+        console.log('Company Manage: No valid session, redirecting to login')
+        window.location.href = '/'
         return
       }
+
+      console.log('Company Manage: Loading company data for user:', session.user?.email)
+      console.log('Company Manage: User ID:', session.user?.id)
+      console.log('Company Manage: Window ID:', getWindowId())
 
       const response = await fetch('/api/company/get', {
         headers: {
@@ -125,6 +133,8 @@ export default function CompanyManagePage() {
         }
       })
       const data = await response.json()
+      
+      console.log('Company Manage: Company data received:', data)
       
       if (data.company) {
         setCompany(data.company)
@@ -171,10 +181,25 @@ export default function CompanyManagePage() {
     setMessage('')
 
     try {
+      // Get the session to get the access token
+      const { supabase: getSupabaseClient } = await import('../../lib/supabaseClient')
+      const supabase = getSupabaseClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (!session?.access_token) {
+        setMessage('No valid session found')
+        return
+      }
+
+      console.log('Company Manage: Saving company data for user:', session.user?.email)
+      console.log('Company Manage: User ID:', session.user?.id)
+      console.log('Company Manage: Company data to save:', companyData)
+
       const response = await fetch('/api/company/save', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
         },
         body: JSON.stringify(companyData)
       })

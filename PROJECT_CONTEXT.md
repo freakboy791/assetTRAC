@@ -21,6 +21,7 @@ assetTRAC is a comprehensive asset management system designed for Small and Medi
 ### What to do instead:
 - Create test files **OUTSIDE** the project directory
 - Use Supabase SQL Editor directly for database testing
+- **Post SQL queries directly in chat** - never create .sql files
 - Delete any temporary files immediately after use
 - Keep the project clean and production-ready at all times
 

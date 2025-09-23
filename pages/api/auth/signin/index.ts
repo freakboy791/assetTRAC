@@ -38,10 +38,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     
     if (!userExists) {
       console.log('Signin API: No account exists for email:', email)
+      
+      // Check if this is an invitation-based user who hasn't logged in yet
+      const { data: invitation, error: inviteError } = await supabase
+        .from('invites')
+        .select('status, admin_approved_at')
+        .eq('invited_email', email)
+        .single()
+
+      if (!inviteError && invitation) {
+        console.log('Signin API: Found invitation for non-existent user, status:', invitation.status)
+        
+        if (invitation.status === 'email_confirmed') {
+          return res.status(400).json({ message: 'Your account is waiting for admin approval. Please contact your administrator for assistance.' })
+        } else if (invitation.status === 'admin_approved' || invitation.status === 'completed') {
+          console.log('Signin API: Invitation approved/completed, but user not created yet - this should not happen')
+          return res.status(400).json({ message: 'Account setup incomplete. Please contact your administrator.' })
+        }
+      }
+      
       return res.status(400).json({ message: 'No account exists for this email address' })
     }
 
-    // Check if user is approved by admin (only for new invitation-based users)
+    // Check if user is approved by admin
     console.log('Signin API: Checking user approval status...')
     
     // First get the user ID
@@ -62,56 +81,57 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (isAdmin) {
       console.log('Signin API: User is admin, bypassing approval check')
     } else {
-      // Check if user is approved by admin
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('is_approved')
-        .eq('email', email)
+      // ALWAYS check invitation status first for any user
+      const { data: invitation, error: inviteError } = await supabase
+        .from('invites')
+        .select('id, invited_email, status, admin_approved_at')
+        .eq('invited_email', email)
         .single()
 
-      if (profileError) {
-        console.log('Signin API: Profile error:', profileError)
-        // If profile doesn't exist, check if this is an invitation-based user
-        // by looking for an invitation record
-        const { data: invitation, error: inviteError } = await supabase
-          .from('invites')
-          .select('status')
-          .eq('invited_email', email)
-          .single()
-
-        if (!inviteError && invitation) {
-          console.log('Signin API: Found invitation, status:', invitation.status)
-          if (invitation.status === 'email_confirmed') {
-            return res.status(400).json({ message: 'Your account is waiting for admin approval. Please contact your administrator for assistance.' })
-          } else if (invitation.status === 'admin_approved') {
-            console.log('Signin API: User is approved, allowing login')
-            // Allow login for approved users
-          } else if (invitation.status === 'completed') {
-            console.log('Signin API: User is completed, allowing login')
-            // Allow login for completed users
-          } else {
-            console.log('Signin API: Unknown invitation status:', invitation.status, 'allowing login')
-            // Allow login for any other status
-          }
-        } else {
-          // No profile and no invitation - this is an existing admin/owner account
-          console.log('Signin API: No profile or invitation found, allowing login for existing account')
-        }
+      if (!inviteError && invitation) {
+        console.log('Signin API: Found invitation, status:', invitation.status)
+        console.log('Signin API: Invitation details:', {
+          id: invitation.id,
+          email: invitation.invited_email,
+          status: invitation.status,
+          admin_approved_at: invitation.admin_approved_at
+        })
         
-        // TEMPORARY: Allow login for cmatt777@comcast.net regardless of status
-        if (email === 'cmatt777@comcast.net') {
-          console.log('Signin API: TEMPORARY BYPASS for cmatt777@comcast.net')
+        if (invitation.status === 'email_confirmed') {
+          console.log('Signin API: User not yet approved, blocking login')
+          return res.status(400).json({ message: 'Your account is waiting for admin approval. Please contact your administrator for assistance.' })
+        } else if (invitation.status === 'admin_approved' || invitation.status === 'completed') {
+          console.log('Signin API: User is approved/completed, allowing login')
+          // Allow login for approved or completed users
+        } else {
+          console.log('Signin API: Unknown invitation status:', invitation.status, 'allowing login')
+          // Allow login for any other status
         }
       } else {
-        console.log('Signin API: Profile found, is_approved:', profile.is_approved)
-        if (profile.is_approved === false) {
-          return res.status(400).json({ message: 'Your account is waiting for admin approval. Please contact your administrator for assistance.' })
+        console.log('Signin API: No invitation found, checking profile status')
+        // No invitation found, check profile status
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('is_approved')
+          .eq('email', email)
+          .single()
+
+        if (profileError) {
+          console.log('Signin API: No profile found, allowing login for existing account')
+          // No profile and no invitation - this is an existing admin/owner account
+        } else {
+          console.log('Signin API: Profile found, is_approved:', profile.is_approved)
+          if (profile.is_approved === false) {
+            return res.status(400).json({ message: 'Your account is waiting for admin approval. Please contact your administrator for assistance.' })
+          }
         }
       }
     }
 
     // User exists and is approved, now try to sign in
     console.log('Signin API: User exists and is approved, attempting sign in...')
+    console.log('Signin API: Attempting sign in for email:', email)
+    
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -121,15 +141,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       console.log('Signin API: Supabase auth error:', error)
       console.log('Signin API: Error message:', error.message)
       console.log('Signin API: Error code:', error.status)
-      
+      console.log('Signin API: Full error object:', JSON.stringify(error, null, 2))
+
       // Check for specific error types
       if (error.message.includes('Email not confirmed')) {
         return res.status(400).json({ message: 'Account not activated. Please check your email and click the activation link to activate your account.' })
       }
-      
+
       // If we get here, user exists but password is wrong
       return res.status(400).json({ message: 'Invalid password' })
     }
+
+    console.log('Signin API: Supabase auth successful, data:', data)
 
     console.log('Signin API: Sign in successful')
     

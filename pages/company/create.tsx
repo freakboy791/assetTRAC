@@ -71,9 +71,13 @@ export default function CreateCompanyPage() {
   const [companyEmail, setCompanyEmail] = useState('')
   const [depreciationRate, setDepreciationRate] = useState(7.5)
   const [hasCompany, setHasCompany] = useState(false)
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
   const [stateError, setStateError] = useState('')
   const [zipError, setZipError] = useState('')
   const [phoneError, setPhoneError] = useState('')
+  const [firstNameError, setFirstNameError] = useState('')
+  const [lastNameError, setLastNameError] = useState('')
 
   // Validation functions
   const validateState = (state: string) => {
@@ -137,6 +141,19 @@ export default function CreateCompanyPage() {
     return true
   }
 
+  const validateName = (name: string, fieldName: string) => {
+    if (!name.trim()) {
+      return `${fieldName} is required`
+    }
+    if (name.trim().length < 2) {
+      return `${fieldName} must be at least 2 characters long`
+    }
+    if (name.trim().length > 50) {
+      return `${fieldName} must be less than 50 characters long`
+    }
+    return ''
+  }
+
   const handlePhoneChange = (value: string) => {
     // Remove all non-digit characters
     const digitsOnly = value.replace(/\D/g, '')
@@ -158,6 +175,18 @@ export default function CreateCompanyPage() {
     
     setCompanyPhone(formatted)
     validatePhoneNumber(formatted)
+  }
+
+  const handleFirstNameChange = (value: string) => {
+    setFirstName(value)
+    const error = validateName(value, 'First name')
+    setFirstNameError(error)
+  }
+
+  const handleLastNameChange = (value: string) => {
+    setLastName(value)
+    const error = validateName(value, 'Last name')
+    setLastNameError(error)
   }
 
   useEffect(() => {
@@ -214,12 +243,17 @@ export default function CreateCompanyPage() {
       return
     }
 
-    // Validate state, zip code, and phone number
+    // Validate all required fields
     const isStateValid = validateState(companyState)
     const isZipValid = validateZipCode(companyZip)
     const isPhoneValid = validatePhoneNumber(companyPhone)
+    const firstNameErrorMsg = validateName(firstName, 'First name')
+    const lastNameErrorMsg = validateName(lastName, 'Last name')
     
-    if (!isStateValid || !isZipValid || !isPhoneValid) {
+    setFirstNameError(firstNameErrorMsg)
+    setLastNameError(lastNameErrorMsg)
+    
+    if (!isStateValid || !isZipValid || !isPhoneValid || firstNameErrorMsg || lastNameErrorMsg) {
       setMessage('Please fix the validation errors below')
       return
     }
@@ -252,7 +286,9 @@ export default function CreateCompanyPage() {
           zip: companyZip,
           phone: companyPhone,
           email: companyEmail,
-          depreciation_rate: depreciationRate
+          depreciation_rate: depreciationRate,
+          first_name: firstName,
+          last_name: lastName
         })
       })
 
@@ -621,6 +657,54 @@ export default function CreateCompanyPage() {
                   />
                 </div>
 
+                {/* Personal Information Section */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                    Personal Information
+                  </label>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="firstName" className="block text-sm font-medium text-gray-600">
+                        First Name *
+                      </label>
+                      <input
+                        type="text"
+                        id="firstName"
+                        value={firstName}
+                        onChange={(e) => handleFirstNameChange(e.target.value)}
+                        className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-800 ${
+                          firstNameError ? 'border-red-300' : 'border-gray-300'
+                        }`}
+                        placeholder="John"
+                        required
+                      />
+                      {firstNameError && (
+                        <p className="mt-1 text-sm text-red-600">{firstNameError}</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label htmlFor="lastName" className="block text-sm font-medium text-gray-600">
+                        Last Name *
+                      </label>
+                      <input
+                        type="text"
+                        id="lastName"
+                        value={lastName}
+                        onChange={(e) => handleLastNameChange(e.target.value)}
+                        className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-800 ${
+                          lastNameError ? 'border-red-300' : 'border-gray-300'
+                        }`}
+                        placeholder="Doe"
+                        required
+                      />
+                      {lastNameError && (
+                        <p className="mt-1 text-sm text-red-600">{lastNameError}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-3">

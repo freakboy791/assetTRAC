@@ -100,21 +100,44 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       console.log('Approve User API: Invitation status updated to admin_approved')
     }
 
-    // Update or create user profile to mark as approved
-    const { error: profileError } = await supabase
+    // Update user profile to mark as approved
+    console.log('Approve User API: Updating profile for email:', invitation.invited_email)
+    
+    // First try to update existing profile
+    const { data: updateData, error: profileUpdateError } = await supabase
       .from('profiles')
-      .upsert({
-        email: invitation.invited_email,
+      .update({
         is_approved: true,
         approved_by: user.id,
         approved_at: new Date().toISOString()
       })
+      .eq('email', invitation.invited_email)
+      .select()
 
-    if (profileError) {
-      console.error('Error updating user profile:', profileError)
-      // Don't fail the whole process if this fails
+    if (profileUpdateError) {
+      console.error('Approve User API: Error updating profile:', profileUpdateError)
+      
+      // If update fails, try to create new profile
+      console.log('Approve User API: Update failed, trying to create new profile')
+      const { data: createData, error: createError } = await supabase
+        .from('profiles')
+        .insert({
+          email: invitation.invited_email,
+          is_approved: true,
+          approved_by: user.id,
+          approved_at: new Date().toISOString()
+        })
+        .select()
+
+      if (createError) {
+        console.error('Approve User API: Error creating profile:', createError)
+        console.error('Approve User API: Profile error details:', JSON.stringify(createError, null, 2))
+        // Don't fail the whole process if this fails
+      } else {
+        console.log('Approve User API: Profile created successfully:', createData)
+      }
     } else {
-      console.log('Profile updated/created successfully for:', invitation.invited_email)
+      console.log('Approve User API: Profile updated successfully:', updateData)
     }
 
     console.log('User approved successfully:', invitation.invited_email)

@@ -2,35 +2,36 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Invitation } from '../../../types'
 
-// Tab-specific storage utility
-const getTabId = () => {
-  let tabId = sessionStorage.getItem('tabId')
-  if (!tabId) {
-    tabId = `tab_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    sessionStorage.setItem('tabId', tabId)
+// Window-specific storage utility using localStorage with unique window ID
+const getWindowId = () => {
+  let windowId = localStorage.getItem('windowId')
+  if (!windowId) {
+    // Create a unique window identifier using performance.now() for better uniqueness
+    windowId = `win_${Date.now()}_${performance.now()}_${Math.random().toString(36).substr(2, 9)}`
+    localStorage.setItem('windowId', windowId)
   }
-  return tabId
+  return windowId
 }
 
 const setTabStorage = (key: string, value: string) => {
-  const tabId = getTabId()
-  sessionStorage.setItem(`${tabId}_${key}`, value)
+  const windowId = getWindowId()
+  localStorage.setItem(`${windowId}_${key}`, value)
 }
 
 const getTabStorage = (key: string) => {
-  const tabId = getTabId()
-  return sessionStorage.getItem(`${tabId}_${key}`)
+  const windowId = getWindowId()
+  return localStorage.getItem(`${windowId}_${key}`)
 }
 
 const clearTabStorage = () => {
-  const tabId = getTabId()
-  const keys = Object.keys(sessionStorage)
+  const windowId = getWindowId()
+  const keys = Object.keys(localStorage)
   keys.forEach(key => {
-    if (key.startsWith(`${tabId}_`)) {
-      sessionStorage.removeItem(key)
+    if (key.startsWith(`${windowId}_`)) {
+      localStorage.removeItem(key)
     }
   })
-  sessionStorage.removeItem('tabId')
+  localStorage.removeItem('windowId')
 }
 
 export default function AdminDashboard() {
@@ -133,6 +134,13 @@ export default function AdminDashboard() {
           isOwnerRole = userMetadata?.isOwner || false
           hasCompanyData = userMetadata?.hasCompany || false
           isAdminRole = userMetadata?.isAdmin || false
+        }
+
+        // CRITICAL: Only allow admin users on admin dashboard
+        if (!isAdminRole && !roles.includes('admin')) {
+          console.log('Admin Dashboard: Non-admin user detected, redirecting to regular dashboard')
+          window.location.href = '/dashboard'
+          return
         }
 
         setUserRoles(roles)
@@ -656,7 +664,7 @@ export default function AdminDashboard() {
                 </div>
               )}
 
-            {/* Company Actions - Only for admin/owner/manager roles */}
+            {/* Company Management - For all users with company access */}
             {hasCompany && canManageCompany() && (
               <div className="bg-white overflow-hidden shadow rounded-lg">
                 <div className="p-6">
@@ -913,9 +921,9 @@ export default function AdminDashboard() {
                                   Waiting for user to activate
                                 </span>
                               )}
-                              {invitation.admin_approved_at && invitation.status !== 'completed' && (
+                              {invitation.admin_approved_at && invitation.status === 'admin_approved' && (
                                 <span className="text-sm text-green-600 text-right">
-                                  Approved - waiting for user completion
+                                  Approved - waiting for user to login
                                 </span>
                               )}
                               {invitation.status === 'completed' && invitation.admin_approved_at && (

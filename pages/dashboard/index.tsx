@@ -2,35 +2,36 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Invitation } from '../../types'
 
-// Tab-specific storage utility
-const getTabId = () => {
-  let tabId = sessionStorage.getItem('tabId')
-  if (!tabId) {
-    tabId = `tab_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    sessionStorage.setItem('tabId', tabId)
+// Window-specific storage utility using localStorage with unique window ID
+const getWindowId = () => {
+  let windowId = localStorage.getItem('windowId')
+  if (!windowId) {
+    // Create a unique window identifier using performance.now() for better uniqueness
+    windowId = `win_${Date.now()}_${performance.now()}_${Math.random().toString(36).substr(2, 9)}`
+    localStorage.setItem('windowId', windowId)
   }
-  return tabId
+  return windowId
 }
 
 const setTabStorage = (key: string, value: string) => {
-  const tabId = getTabId()
-  sessionStorage.setItem(`${tabId}_${key}`, value)
+  const windowId = getWindowId()
+  localStorage.setItem(`${windowId}_${key}`, value)
 }
 
 const getTabStorage = (key: string) => {
-  const tabId = getTabId()
-  return sessionStorage.getItem(`${tabId}_${key}`)
+  const windowId = getWindowId()
+  return localStorage.getItem(`${windowId}_${key}`)
 }
 
 const clearTabStorage = () => {
-  const tabId = getTabId()
-  const keys = Object.keys(sessionStorage)
+  const windowId = getWindowId()
+  const keys = Object.keys(localStorage)
   keys.forEach(key => {
-    if (key.startsWith(`${tabId}_`)) {
-      sessionStorage.removeItem(key)
+    if (key.startsWith(`${windowId}_`)) {
+      localStorage.removeItem(key)
     }
   })
-  sessionStorage.removeItem('tabId')
+  localStorage.removeItem('windowId')
 }
 
 export default function DashboardPage() {
@@ -129,10 +130,17 @@ export default function DashboardPage() {
 
 
 
-        setUserRoles(roles)
+          setUserRoles(roles)
         setIsAdmin(isAdminRole)
         setIsOwner(isOwnerRole)
         setHasCompany(hasCompanyData)
+
+        // CRITICAL: Redirect admin users to admin dashboard
+        if (isAdminRole || roles.includes('admin')) {
+          console.log('Dashboard: Admin user detected, redirecting to admin dashboard')
+          window.location.href = '/admin/dashboard'
+          return
+        }
 
         // If owner but no company, check database to be sure
         if (isOwnerRole && !hasCompanyData) {

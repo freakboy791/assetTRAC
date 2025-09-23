@@ -14,10 +14,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  const { name, street, city, state, zip, phone, email, depreciation_rate } = req.body
+  const { name, street, city, state, zip, phone, email, depreciation_rate, first_name, last_name } = req.body
 
   if (!name) {
     return res.status(400).json({ error: 'Company name is required' })
+  }
+
+  if (!first_name || !last_name) {
+    return res.status(400).json({ error: 'First name and last name are required' })
   }
 
   try {
@@ -107,6 +111,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     console.log('Company-user association created successfully')
+
+    // Update user profile with first_name and last_name
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .update({
+        first_name: first_name,
+        last_name: last_name
+      })
+      .eq('id', userData.user.id)
+
+    if (profileError) {
+      console.log('Error updating user profile:', profileError)
+      // Don't fail the request if profile update fails, but log it
+    } else {
+      console.log('User profile updated with first_name and last_name')
+    }
 
     // Log the company creation activity
     try {

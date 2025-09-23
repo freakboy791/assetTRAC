@@ -1,38 +1,41 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 
-// Tab-specific storage utility
-const getTabId = () => {
-  let tabId = sessionStorage.getItem('tabId')
-  if (!tabId) {
-    tabId = `tab_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    sessionStorage.setItem('tabId', tabId)
+// Window-specific storage utility using localStorage with unique window ID
+const getWindowId = () => {
+  let windowId = localStorage.getItem('windowId')
+  if (!windowId) {
+    // Create a unique window identifier using performance.now() for better uniqueness
+    windowId = `win_${Date.now()}_${performance.now()}_${Math.random().toString(36).substr(2, 9)}`
+    localStorage.setItem('windowId', windowId)
   }
-  return tabId
+  return windowId
 }
 
 const setTabStorage = (key: string, value: string) => {
-  const tabId = getTabId()
-  sessionStorage.setItem(`${tabId}_${key}`, value)
+  const windowId = getWindowId()
+  localStorage.setItem(`${windowId}_${key}`, value)
 }
 
 const getTabStorage = (key: string) => {
-  const tabId = getTabId()
-  return sessionStorage.getItem(`${tabId}_${key}`)
+  const windowId = getWindowId()
+  return localStorage.getItem(`${windowId}_${key}`)
 }
 
 const clearTabStorage = () => {
-  const tabId = getTabId()
-  const keys = Object.keys(sessionStorage)
+  const windowId = getWindowId()
+  const keys = Object.keys(localStorage)
   keys.forEach(key => {
-    if (key.startsWith(`${tabId}_`)) {
-      sessionStorage.removeItem(key)
+    if (key.startsWith(`${windowId}_`)) {
+      localStorage.removeItem(key)
     }
   })
-  sessionStorage.removeItem('tabId')
+  localStorage.removeItem('windowId')
 }
 
 export default function HomePage() {
+  console.log('Home page: Component rendering')
+  
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [message, setMessage] = useState('')
@@ -53,13 +56,40 @@ export default function HomePage() {
         const { supabase: getSupabaseClient } = await import('../lib/supabaseClient')
         const supabase = getSupabaseClient()
         
+        // Clear any existing session to force fresh authentication
+        await supabase.auth.signOut()
+        
+        // Check if there's a valid session after clearing
         const { data: { session }, error } = await supabase.auth.getSession()
         console.log('Home page: Session check result:', error ? 'Error' : 'Success')
         console.log('Home page: Session data:', session ? 'Session found' : 'No session')
         
         if (session?.user) {
-          console.log('Home page: User found, redirecting to dashboard')
-          window.location.href = '/dashboard'
+          console.log('Home page: User found, checking role for proper redirect')
+          
+          // Check user role and redirect accordingly
+          try {
+            const response = await fetch('/api/auth/getUser', {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${session.access_token}`
+              }
+            })
+            
+            const userData = await response.json()
+            console.log('Home page: User data:', userData)
+            
+            if (userData.isAdmin) {
+              console.log('Home page: User is admin, redirecting to admin dashboard')
+              window.location.href = '/admin/dashboard'
+            } else {
+              console.log('Home page: User is not admin, redirecting to regular dashboard')
+              window.location.href = '/dashboard'
+            }
+          } catch (error) {
+            console.log('Home page: Error checking user role, defaulting to regular dashboard')
+            window.location.href = '/dashboard'
+          }
         } else {
           console.log('Home page: No user found, staying on home page')
         }
@@ -126,9 +156,11 @@ export default function HomePage() {
   }, [])
 
   const handleLogIn = async () => {
+    console.log('Home page: handleLogIn called')
     console.log('Login attempt started', { email, password: '***' })
     
     if (!email || !password) {
+      console.log('Home page: Missing email or password')
       setMessage('Please fill in all fields')
       return
     }
@@ -669,7 +701,11 @@ export default function HomePage() {
             <div className="space-y-3">
               <button
                 type="button"
-                onClick={handleLogIn}
+                onClick={(e) => {
+                  console.log('Home page: Login button clicked')
+                  e.preventDefault()
+                  handleLogIn()
+                }}
                 disabled={loading}
                 className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
