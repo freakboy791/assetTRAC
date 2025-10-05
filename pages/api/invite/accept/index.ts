@@ -201,23 +201,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       console.log('Accept invite API: Profile created/updated successfully')
     }
 
-    // Create company-user association if this is an owner invitation
-    if (invitation.role === 'owner' && invitation.company_id) {
-      const { error: associationError } = await supabase
-        .from('company_users')
-        .insert({
-          user_id: userData.user.id,
-          company_id: invitation.company_id,
-          role: 'owner'
-        })
-
-      if (associationError) {
-        console.error('Accept invite API: Error creating company-user association:', associationError)
-        // Don't fail the whole process if this fails
-      } else {
-        console.log('Accept invite API: Company-user association created successfully')
-      }
-    }
+    // DO NOT create company-user association during invitation acceptance
+    // The user will be associated with their own company when they create it
+    // This prevents the user from being associated with the admin's company
+    console.log('Accept invite API: Skipping company-user association - user will be associated with their own company when created')
 
     // Create a session for the user
     const { data: sessionData, error: sessionError } = await supabase.auth.admin.generateLink({
