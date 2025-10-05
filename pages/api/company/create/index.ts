@@ -172,6 +172,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         console.log('Company-owner association created successfully')
       } else if (!isAdmin) {
         // Owner creating their own company
+        // First, remove any existing company associations (from invitation acceptance)
+        console.log('Company create API: Removing existing company associations for user:', userData.user.id)
+        const { error: deleteError } = await supabaseAdmin
+          .from('company_users')
+          .delete()
+          .eq('user_id', userData.user.id)
+        
+        if (deleteError) {
+          console.log('Company create API: Error removing existing associations:', deleteError)
+          // Continue anyway, don't fail the process
+        } else {
+          console.log('Company create API: Removed existing company associations')
+        }
+        
+        // Now create the new association with the user's company
         const { error: associationError } = await supabaseAdmin
           .from('company_users')
           .insert({
