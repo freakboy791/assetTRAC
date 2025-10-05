@@ -99,7 +99,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       const token = authHeader.split(' ')[1]
-      const { data: authUserData, error: userError } = await supabaseAdmin.auth.getUser(token)
+      const { data: authUserData, error: userError } = await supabase.auth.getUser(token)
       
       if (userError || !authUserData.user) {
         console.log('Error getting user from token:', userError)
