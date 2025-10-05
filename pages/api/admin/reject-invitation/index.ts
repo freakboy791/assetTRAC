@@ -21,21 +21,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const token = authHeader.substring(7) // Remove 'Bearer ' prefix
     
-    // Create a client for token validation using anon key
+    // Create a client for token validation using service role key
     const { createClient } = await import('@supabase/supabase-js')
-    const anonClient = createClient(
+    const serviceClient = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        auth: {
-          autoRefreshToken: true,
-          persistSession: false
-        }
-      }
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
     
     // Get the current user's session using the token
-    const { data: { user }, error: userError } = await anonClient.auth.getUser(token)
+    const { data: { user }, error: userError } = await serviceClient.auth.getUser(token)
     
     if (userError || !user) {
       return res.status(401).json({ error: 'Invalid token' })
