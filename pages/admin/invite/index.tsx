@@ -94,7 +94,9 @@ export default function AdminInvitePage() {
         
         if (sessionError || !validatedSession) {
           console.error('Admin Invite: Session validation failed:', sessionError?.message)
-          handleSessionError(sessionError)
+          if (sessionError) {
+            handleSessionError(sessionError)
+          }
           return
         }
         
