@@ -6,6 +6,11 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
+
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
@@ -30,15 +35,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const token = authHeader.split(' ')[1]
     console.log('Approve User API: Token length:', token.length)
     
-    // Create a client for token validation using service role key
-    const { createClient } = await import('@supabase/supabase-js')
-    const serviceClient = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    )
-    
-    // Get the user from the token using service role client
-    const { data: { user }, error: userError } = await serviceClient.auth.getUser(token)
+    // Get the user from the token using anon client (to avoid session corruption)
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token)
     console.log('Approve User API: User lookup result:', { user: !!user, error: userError?.message })
     
     if (userError || !user) {
@@ -47,7 +45,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Check if user has permission to approve users (admin, owner, or manager)
-    const { data: companyUser, error: companyUserError } = await supabase
+    const { data: companyUser, error: companyUserError } = await supabaseAdmin
       .from('company_users')
       .select('role')
       .eq('user_id', user.id)
@@ -78,7 +76,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Get the invitation
-    const { data: invitation, error: inviteError } = await supabase
+    const { data: invitation, error: inviteError } = await supabaseAdmin
       .from('invites')
       .select('*')
       .eq('id', invitationId)
@@ -101,7 +99,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Update invitation status to admin_approved
-    const { data: updatedInvite, error: updateError } = await supabase
+    const { data: updatedInvite, error: updateError } = await supabaseAdmin
       .from('invites')
       .update({
         status: 'admin_approved',
@@ -123,7 +121,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.log('Approve User API: Updating profile for email:', invitation.invited_email)
     
     // First try to update existing profile
-    const { data: updateData, error: profileUpdateError } = await supabase
+    const { data: updateData, error: profileUpdateError } = await supabaseAdmin
       .from('profiles')
       .update({
         is_approved: true,
@@ -138,7 +136,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       
       // If update fails, try to create new profile
       console.log('Approve User API: Update failed, trying to create new profile')
-      const { data: createData, error: createError } = await supabase
+      const { data: createData, error: createError } = await supabaseAdmin
         .from('profiles')
         .insert({
           email: invitation.invited_email,
