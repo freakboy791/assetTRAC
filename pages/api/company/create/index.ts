@@ -6,6 +6,11 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
+
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
@@ -41,7 +46,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.log('Company create API: Received data:', { name, street, city, state, zip, phone, email, depreciation_rate })
 
     // Check if company already exists
-    const { data: existingCompanies, error: fetchError } = await supabase
+    const { data: existingCompanies, error: fetchError } = await supabaseAdmin
       .from('companies')
       .select('id')
       .eq('name', trimmedData.name)
@@ -94,7 +99,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       const token = authHeader.split(' ')[1]
-      const { data: authUserData, error: userError } = await supabase.auth.getUser(token)
+      const { data: authUserData, error: userError } = await supabaseAdmin.auth.getUser(token)
       
       if (userError || !authUserData.user) {
         console.log('Error getting user from token:', userError)
@@ -108,7 +113,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Create new company
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('companies')
       .insert({
         name: trimmedData.name,
@@ -137,7 +142,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Create the user-company association
     if (userData.user.id && !userData.user.id.startsWith('temp_')) {
       // Check if the user is an admin
-      const { data: companyUser, error: roleError } = await supabase
+      const { data: companyUser, error: roleError } = await supabaseAdmin
         .from('company_users')
         .select('role')
         .eq('user_id', userData.user.id)
@@ -148,7 +153,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (isAdmin && selected_owner_id) {
         // Admin creating company for a specific owner
         console.log('Company create API: Admin creating company for owner:', selected_owner_id)
-        const { error: associationError } = await supabase
+        const { error: associationError } = await supabaseAdmin
           .from('company_users')
           .insert({
             user_id: selected_owner_id,
@@ -167,7 +172,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         console.log('Company-owner association created successfully')
       } else if (!isAdmin) {
         // Owner creating their own company
-        const { error: associationError } = await supabase
+        const { error: associationError } = await supabaseAdmin
           .from('company_users')
           .insert({
             user_id: userData.user.id,
@@ -193,7 +198,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Store the company ID in the invitation record for later use
       if (password) {
         // This is the invitation flow - update the invitation record with company ID
-        const { error: updateInviteError } = await supabase
+        const { error: updateInviteError } = await supabaseAdmin
           .from('invites')
           .update({ company_id: company.id })
           .eq('invited_email', email)
@@ -209,7 +214,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Update user profile with first_name and last_name
-    const { error: profileError } = await supabase
+    const { error: profileError } = await supabaseAdmin
       .from('profiles')
       .update({
         first_name: trimmedData.first_name,
@@ -231,14 +236,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       
       // For invitation flow, get the admin who created the invitation
       if (password) {
-        const { data: invitation } = await supabase
+        const { data: invitation } = await supabaseAdmin
           .from('invites')
           .select('created_by')
           .eq('invited_email', email)
           .single()
         
         if (invitation?.created_by) {
-          const { data: adminProfile } = await supabase
+          const { data: adminProfile } = await supabaseAdmin
             .from('profiles')
             .select('email')
             .eq('id', invitation.created_by)
