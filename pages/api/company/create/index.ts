@@ -197,19 +197,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       
       // Store the company ID in the invitation record for later use
       if (password) {
-        // This is the invitation flow - update the invitation record with company ID
-        const { error: updateInviteError } = await supabaseAdmin
-          .from('invites')
-          .update({ company_id: company.id })
-          .eq('invited_email', email)
-          .in('status', ['pending', 'email_confirmed'])
-
-        if (updateInviteError) {
-          console.error('Company create API: Error updating invitation with company ID:', updateInviteError)
-          // Don't fail the whole process if this fails
-        } else {
-          console.log('Company create API: Invitation updated with company ID:', company.id)
-        }
+        // This is the invitation flow - DO NOT update the invitation company_id
+        // The invitation should stay associated with the admin's company
+        // The user's company is separate and will be linked via the user profile
+        console.log('Company create API: Invitation flow - keeping invitation with admin company, not updating company_id')
       }
     }
 
