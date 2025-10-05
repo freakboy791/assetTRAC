@@ -191,10 +191,8 @@ export default function AdminDashboard() {
           })
         }
         
-      console.log('Admin Dashboard: Received invitations:', data)
-      console.log('Admin Dashboard: Invitation statuses:', data?.map(inv => ({ id: inv.id, email: inv.invited_email, status: inv.status })))
-      console.log('Admin Dashboard: Filtering - showing invitations where status !== completed')
-      console.log('Admin Dashboard: Filtered invitations:', data?.filter(inv => inv.status !== 'completed').map(inv => ({ id: inv.id, email: inv.invited_email, status: inv.status })))
+        console.log('Admin Dashboard: Received invitations:', data)
+        console.log('Admin Dashboard: Invitation statuses:', data?.map(inv => ({ id: inv.id, email: inv.invited_email, status: inv.status })))
         setInvitations(data || [])
       } else {
         console.error('Admin Dashboard: Failed to load invitations, status:', response.status)
@@ -470,18 +468,18 @@ export default function AdminDashboard() {
   }
 
   const getAdminApprovalStatus = (invitation: Invitation) => {
-    if (invitation.status === 'admin_approved') {
+    if (invitation.admin_approved_at) {
       return { text: 'Approved', color: 'bg-green-100 text-green-800' }
     } else if (invitation.status === 'email_confirmed') {
       return { text: 'Unapproved', color: 'bg-red-100 text-red-800' }
     } else if (invitation.status === 'completed') {
-      return { text: 'Completed', color: 'bg-blue-100 text-blue-800' }
+      return { text: 'Approved', color: 'bg-green-100 text-green-800' }
     } else if (invitation.status === 'pending') {
       return { text: 'Unapproved', color: 'bg-red-100 text-red-800' }
     } else if (invitation.status === 'rejected') {
       return { text: 'Rejected', color: 'bg-red-100 text-red-800' }
     } else if (invitation.status === 'expired') {
-      return { text: 'Expired', color: 'bg-gray-100 text-gray-800' }
+      return { text: 'Expired', color: 'bg-red-100 text-red-800' }
     } else {
       return { text: 'Unknown', color: 'bg-gray-100 text-gray-800' }
     }
@@ -877,13 +875,13 @@ export default function AdminDashboard() {
               </div>
               <div className="bg-white p-4 rounded-lg shadow">
                 <div className="text-2xl font-bold text-yellow-600">
-                  {invitations.filter(inv => inv.status === 'email_confirmed').length}
+                  {invitations.filter(inv => (inv.status === 'pending' || inv.status === 'email_confirmed') && !inv.admin_approved_at).length}
                 </div>
                 <div className="text-sm text-gray-600">Awaiting Approval</div>
               </div>
               <div className="bg-white p-4 rounded-lg shadow">
                 <div className="text-2xl font-bold text-green-600">
-                  {invitations.filter(inv => inv.status === 'admin_approved').length}
+                  {invitations.filter(inv => inv.admin_approved_at && inv.status !== 'completed').length}
                 </div>
                 <div className="text-sm text-gray-600">Approved</div>
               </div>
@@ -903,7 +901,7 @@ export default function AdminDashboard() {
                 </div>
               ) : (
                 <ul className="space-y-4">
-                      {invitations.filter(invitation => invitation.status !== 'completed').map((invitation) => (
+                      {invitations.filter(invitation => invitation.status !== 'completed' && invitation.status !== 'admin_approved').map((invitation) => (
                     <li key={invitation.id} className="px-6 py-4 bg-white border border-gray-200 rounded-lg shadow-sm">
                       <div className="flex items-center justify-between">
                         <div className="flex-1">
@@ -954,7 +952,7 @@ export default function AdminDashboard() {
                         </div>
                         <div className="flex flex-col items-end space-y-2">
                           {/* Action Buttons */}
-                          {invitation.status === 'email_confirmed' && (
+                          {invitation.status === 'email_confirmed' && !invitation.admin_approved_at && (
                             <div className="flex items-center space-x-2">
                               <button
                                 onClick={() => handleApprove(invitation.id)}
@@ -977,14 +975,14 @@ export default function AdminDashboard() {
                               Waiting for user to activate
                             </span>
                           )}
-                          {invitation.status === 'email_confirmed' && (
+                          {invitation.status === 'email_confirmed' && !invitation.admin_approved_at && (
                             <span className="text-sm text-yellow-600 text-right">
                               User activated - awaiting admin approval
                             </span>
                           )}
-                          {invitation.status === 'admin_approved' && (
+                              {invitation.admin_approved_at && invitation.status === 'admin_approved' && (
                             <span className="text-sm text-green-600 text-right">
-                              ✓ Approved - waiting for user to login
+                                  Approved - waiting for user to login
                             </span>
                           )}
                           {invitation.status === 'completed' && invitation.admin_approved_at && (
@@ -1011,6 +1009,62 @@ export default function AdminDashboard() {
             </div>
           )}
 
+          {/* Approved Invitations Section */}
+          {invitations.filter(invitation => invitation.status === 'admin_approved').length > 0 && (
+            <div className="bg-white rounded-lg shadow">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h3 className="text-lg font-medium text-gray-900">Approved Invitations</h3>
+                <p className="text-sm text-gray-500">These users have been approved and are waiting to complete their first login</p>
+              </div>
+              <div className="p-6">
+                <ul className="space-y-4">
+                  {invitations.filter(invitation => invitation.status === 'admin_approved').map((invitation) => (
+                    <li key={invitation.id} className="px-6 py-4 bg-green-50 border border-green-200 rounded-lg shadow-sm">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between">
+                            <p className="text-sm font-medium text-gray-900">
+                              {invitation.invited_email}
+                            </p>
+                            <div className="flex items-center space-x-2">
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                {invitation.role}
+                              </span>
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                Approved
+                              </span>
+                            </div>
+                          </div>
+                          <p className="text-sm text-gray-500 mt-1">
+                            Company: {invitation.company_name}
+                          </p>
+                          {invitation.message && (
+                            <p className="text-sm text-gray-600 mt-1">
+                              Message: {invitation.message}
+                            </p>
+                          )}
+                          <div className="flex items-center space-x-4 mt-2 text-xs text-gray-400">
+                            <span>Created: {new Date(invitation.created_at).toLocaleDateString()}</span>
+                            {invitation.email_confirmed_at && (
+                              <span>Activated: {new Date(invitation.email_confirmed_at).toLocaleDateString()}</span>
+                            )}
+                            {invitation.admin_approved_at && (
+                              <span>Approved: {new Date(invitation.admin_approved_at).toLocaleDateString()}</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end space-y-2">
+                          <span className="text-sm text-green-600 text-right">
+                            ✓ Approved - waiting for user to login
+                          </span>
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
             </div>
           )}
 

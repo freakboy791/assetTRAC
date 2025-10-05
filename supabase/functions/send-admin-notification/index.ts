@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -15,37 +14,119 @@ serve(async (req) => {
   try {
     const { adminEmails, userEmail, userName, companyName, adminDashboardUrl } = await req.json()
 
-    console.log('Send admin notification function called with:', { adminEmails, userEmail, userName, companyName, adminDashboardUrl })
-
-    // For now, just log the email details since we don't have email service configured
-    // In production, you would integrate with an email service like SendGrid, Resend, etc.
-    console.log('=== ADMIN APPROVAL REQUEST EMAIL ===')
-    adminEmails.forEach((adminEmail: string) => {
-      console.log('To:', adminEmail)
-      console.log('Subject: New User Approval Request - assetTRAC')
-      console.log('Message:')
-      console.log(`Hello Admin,`)
-      console.log(`A new user is requesting approval to access assetTRAC.`)
-      console.log(``)
-      console.log(`User Details:`)
-      console.log(`- Email: ${userEmail}`)
-      console.log(`- Name: ${userName || 'Not provided'}`)
-      console.log(`- Company: ${companyName || 'Not provided'}`)
-      console.log(`- Requested at: ${new Date().toLocaleString()}`)
-      console.log(``)
-      console.log(`Please review and approve this user by clicking the link below:`)
-      console.log(adminDashboardUrl)
-      console.log(``)
-      console.log(`This will take you directly to the admin dashboard where you can approve or reject the request.`)
-      console.log(`========================`)
+    console.log('Send admin notification function called with:', { 
+      adminEmails, 
+      userEmail, 
+      userName, 
+      companyName, 
+      adminDashboardUrl 
     })
+
+    // Get Brevo API key from environment
+    const brevoApiKey = Deno.env.get('BREVO_API_KEY')
+    
+    if (!brevoApiKey) {
+      console.log('BREVO_API_KEY not found, logging notification instead of sending')
+      console.log('=== ADMIN NOTIFICATION ===')
+      console.log('To:', adminEmails.join(', '))
+      console.log('Subject: User Approval Request - ' + companyName)
+      console.log('Message:')
+      console.log(`A user is requesting admin approval for their account.`)
+      console.log(`User: ${userName || userEmail}`)
+      console.log(`Company: ${companyName}`)
+      console.log(`Email: ${userEmail}`)
+      console.log(`Admin Dashboard: ${adminDashboardUrl}`)
+      console.log('========================')
+
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: 'Admin notification logged (Brevo API key not configured)',
+          adminEmails,
+          userEmail
+        }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200 
+        }
+      )
+    }
+
+    // Send email using Brevo API
+    const emailData = {
+      sender: {
+        name: "assetTRAC",
+        email: "noreply@chrismatt.com"
+      },
+      to: adminEmails.map(email => ({
+        email: email,
+        name: email.split('@')[0]
+      })),
+      subject: `User Approval Request - ${companyName}`,
+      htmlContent: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #333;">User Approval Request</h2>
+          <p>Hello Admin,</p>
+          <p>A user is requesting approval for their account on assetTRAC.</p>
+          
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
+            <h3 style="margin-top: 0; color: #495057;">User Details:</h3>
+            <p><strong>Name:</strong> ${userName || 'Not provided'}</p>
+            <p><strong>Email:</strong> ${userEmail}</p>
+            <p><strong>Company:</strong> ${companyName}</p>
+          </div>
+          
+          <p>Please review and approve this user's account by clicking the button below:</p>
+          
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${adminDashboardUrl}" style="background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">Review & Approve User</a>
+          </div>
+          
+          <p>Or copy and paste this link into your browser:</p>
+          <p style="word-break: break-all; color: #666;">${adminDashboardUrl}</p>
+          
+          <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
+          <p style="color: #666; font-size: 12px;">This notification was sent by assetTRAC. Please review the user's account and approve or reject as appropriate.</p>
+        </div>
+      `
+    }
+
+    const brevoResponse = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'accept': 'application/json',
+        'api-key': brevoApiKey,
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify(emailData)
+    })
+
+    const brevoResult = await brevoResponse.json()
+
+    if (!brevoResponse.ok) {
+      console.error('Brevo API error:', brevoResult)
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          message: `Failed to send notification: ${brevoResult.message || 'Unknown error'}`,
+          error: brevoResult
+        }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 500 
+        }
+      )
+    }
+
+    console.log('Admin notification sent successfully via Brevo:', brevoResult)
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: 'Admin notification emails logged (email service not configured)',
+        message: 'Admin notification sent successfully',
         adminEmails,
-        adminDashboardUrl
+        userEmail,
+        brevoMessageId: brevoResult.messageId
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -53,7 +53,7 @@ export interface Invitation {
   created_by: string
   created_at: string
   role: string
-  status: 'pending' | 'email_confirmed' | 'admin_approved' | 'completed' | 'expired'
+  status: 'pending' | 'email_confirmed' | 'admin_approved' | 'completed' | 'expired' | 'rejected'
   email_confirmed_at: string | null
   admin_approved_at: string | null
   admin_approved_by: string | null

@@ -18,51 +18,51 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
 
-    // Get all admin users - check both profiles and company_users tables
-    let adminUsers: { email: string }[] = []
-    
-    // First try to get admins from profiles table
-    const { data: profileAdmins, error: profileError } = await supabase
-      .from('profiles')
-      .select('email')
-      .eq('role', 'admin')
-    
-    console.log('Profile admins query result:', { profileAdmins, profileError })
-    
-    if (!profileError && profileAdmins && profileAdmins.length > 0) {
-      adminUsers = profileAdmins
-      console.log('Found admins in profiles table:', adminUsers)
-    } else {
-      console.log('No admins found in profiles table, trying company_users table')
-      
-      // If no admins in profiles, try company_users table
-      const { data: companyAdmins, error: companyError } = await supabase
-        .from('company_users')
-        .select('user_id, users!inner(email)')
-        .eq('role', 'admin')
-      
-      if (companyError) {
-        console.error('Error fetching admin users from company_users:', companyError)
-        return res.status(500).json({ message: 'Failed to fetch admin users' })
-      }
-      
-      if (companyAdmins && companyAdmins.length > 0) {
-        adminUsers = companyAdmins.map((admin: any) => ({ email: admin.users.email }))
+    // If userName not provided, try to get it from the user's profile
+    let displayName = userName
+    if (!displayName) {
+      try {
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('first_name, last_name')
+          .eq('email', userEmail)
+          .single()
+        
+        if (!profileError && profile) {
+          displayName = `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || userEmail
+        } else {
+          displayName = userEmail
+        }
+      } catch (error) {
+        console.log('Could not fetch user name from profile, using email:', error)
+        displayName = userEmail
       }
     }
+
+    // Get all admin users from company_users table
+    let adminUsers: { email: string }[] = []
     
-    // If still no admins found, try a different approach - get users with admin role from any table
-    if (adminUsers.length === 0) {
-      console.log('No admins found in either table, trying to find any user with admin role')
+    console.log('Getting admins from company_users table')
+    
+    const { data: companyAdmins, error: companyError } = await supabase
+      .from('company_users')
+      .select('user_id, role')
+      .eq('role', 'admin')
+    
+    if (companyError) {
+      console.error('Error fetching admin users from company_users:', companyError)
+      return res.status(500).json({ message: 'Failed to fetch admin users' })
+    }
+    
+    if (companyAdmins && companyAdmins.length > 0) {
+      // Get email addresses for the admin user IDs
+      const adminUserIds = companyAdmins.map((admin: any) => admin.user_id)
+      const { data: adminUserData, error: adminUserError } = await supabase.auth.admin.listUsers()
       
-      // Get all users and check their roles
-      const { data: allUsers, error: allUsersError } = await supabase
-        .from('company_users')
-        .select('user_id, role, users!inner(email)')
-      
-      if (!allUsersError && allUsers) {
-        const admins = allUsers.filter((user: any) => user.role === 'admin')
-        adminUsers = admins.map((admin: any) => ({ email: admin.users.email }))
+      if (!adminUserError && adminUserData && adminUserData.users) {
+        adminUsers = adminUserData.users
+          .filter((user: any) => adminUserIds.includes(user.id))
+          .map((user: any) => ({ email: user.email }))
       }
     }
 
@@ -76,7 +76,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       adminUsers = [{ email: fallbackAdminEmail }]
     }
 
-    // Get the base URL for the admin dashboard link
+    // Get the base URL for the admin dashboard link - go to dashboard where pending invitations are displayed
     const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
     const adminDashboardUrl = `${baseUrl}/admin/dashboard`
 
@@ -84,7 +84,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const adminEmails = adminUsers.map(admin => admin.email).filter(Boolean)
     
     console.log('Sending admin approval request notifications to:', adminEmails)
-    console.log('User requesting approval:', userEmail)
+    console.log('User requesting approval:', displayName, `(${userEmail})`)
     console.log('Company:', companyName)
 
     // Call the Supabase Edge Function to send emails
@@ -98,7 +98,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         body: JSON.stringify({
           adminEmails,
           userEmail,
-          userName,
+          userName: displayName,
           companyName,
           adminDashboardUrl
         })

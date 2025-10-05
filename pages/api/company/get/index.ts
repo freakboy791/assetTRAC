@@ -6,7 +6,13 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  {
+    auth: {
+      autoRefreshToken: true,
+      persistSession: false
+    }
+  }
 )
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -23,16 +29,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const token = authHeader.split(' ')[1]
     
+    console.log('Company Get API: Token received, length:', token.length)
+    console.log('Company Get API: Token preview:', token.substring(0, 50) + '...')
+    
     // Get the user from the token
     const { data: { user }, error: userError } = await supabase.auth.getUser(token)
     if (userError || !user) {
+      console.log('Company Get API: Invalid token or user error:', userError)
+      console.log('Company Get API: User error details:', JSON.stringify(userError, null, 2))
       return res.status(401).json({ error: 'Invalid token' })
     }
 
     console.log('Company Get API: User ID:', user.id)
     console.log('Company Get API: User email:', user.email)
+    console.log('Company Get API: Token received:', token.substring(0, 20) + '...')
 
     // Get the company associated with this user through company_users table
+    console.log('Company Get API: Querying company_users for user_id:', user.id)
     const { data: companyUsers, error: companyUsersError } = await supabase
       .from('company_users')
       .select(`

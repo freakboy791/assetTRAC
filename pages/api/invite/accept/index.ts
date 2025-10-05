@@ -27,8 +27,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .eq('token', token)
       .single()
 
-    if (inviteError || !invitation) {
-      console.log('Accept invite API: Invitation not found:', inviteError)
+    console.log('Accept invite API: Invitation lookup result:', { invitation, inviteError })
+
+    if (inviteError) {
+      console.error('Accept invite API: Error looking up invitation:', inviteError)
+      return res.status(500).json({ message: 'Error looking up invitation' })
+    }
+
+    if (!invitation) {
+      console.log('Accept invite API: Invitation not found for token:', token)
       return res.status(404).json({ message: 'Invitation not found' })
     }
 
@@ -66,6 +73,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Update existing user's password and metadata
       const { data: updateData, error: updateError } = await supabase.auth.admin.updateUserById(existingUser.id, {
         password: password,
+        email_confirm: true, // Ensure email is confirmed
         user_metadata: {
           ...existingUser.user_metadata,
           invited_email: invitation.invited_email,
@@ -88,19 +96,49 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     } else {
       console.log('Accept invite API: Creating new user account')
       
-      // Create new user account using Supabase Admin
-      const { data: newUserData, error: userError } = await supabase.auth.admin.createUser({
-        email: invitation.invited_email,
-        password: password,
-        email_confirm: true, // Auto-confirm email since they're accepting an invitation
-        user_metadata: {
-          invited_email: invitation.invited_email,
-          company_name: invitation.company_name,
-          invited_via: 'admin_invitation',
-          invitation_role: invitation.role,
-          invitation_company_id: invitation.company_id
+      // First check if user already exists
+      const { data: usersData, error: checkError } = await supabase.auth.admin.listUsers()
+      const existingUser = usersData?.users?.find((user: any) => user.email === invitation.invited_email)
+      
+      if (existingUser && !checkError) {
+        console.log('Accept invite API: User already exists, updating password and confirming email')
+        
+        // Update existing user's password and confirm email
+        const { data: updateData, error: updateError } = await supabase.auth.admin.updateUserById(existingUser.id, {
+          password: password,
+          email_confirm: true,
+          user_metadata: {
+            invited_email: invitation.invited_email,
+            company_name: invitation.company_name,
+            invited_via: 'admin_invitation',
+            invitation_role: invitation.role,
+            invitation_company_id: invitation.company_id
+          }
+        })
+
+        if (updateError) {
+          console.error('Accept invite API: Error updating existing user:', updateError)
+          return res.status(500).json({ 
+            message: `Failed to update existing user: ${updateError.message}` 
+          })
         }
-      })
+
+        userData = { user: updateData.user }
+        console.log('Accept invite API: Existing user updated successfully')
+      } else {
+        // Create new user account using Supabase Admin
+        const { data: newUserData, error: userError } = await supabase.auth.admin.createUser({
+          email: invitation.invited_email,
+          password: password,
+          email_confirm: true, // Auto-confirm email since they're accepting an invitation
+          user_metadata: {
+            invited_email: invitation.invited_email,
+            company_name: invitation.company_name,
+            invited_via: 'admin_invitation',
+            invitation_role: invitation.role,
+            invitation_company_id: invitation.company_id
+          }
+        })
 
       if (userError) {
         console.error('Accept invite API: Error creating user:', userError)
@@ -109,27 +147,42 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         })
       }
 
+      if (!newUserData || !newUserData.user) {
+        console.error('Accept invite API: User creation returned no user data')
+        return res.status(500).json({ 
+          message: 'User creation failed - no user data returned' 
+        })
+      }
+
       userData = newUserData
       console.log('Accept invite API: New user created successfully:', userData.user?.email)
+      }
     }
 
     console.log('Accept invite API: User created successfully:', userData.user?.email)
 
     // Update invitation status to 'email_confirmed' (awaiting admin approval)
+    console.log('Accept invite API: Updating invitation status to email_confirmed for token:', token)
     const { error: updateError } = await supabase
       .from('invites')
       .update({ 
         status: 'email_confirmed',
-        email_confirmed_at: new Date().toISOString()
+        email_confirmed_at: new Date().toISOString(),
+        accepted: true,
+        company_id: invitation.company_id
       })
       .eq('token', token)
 
+    console.log('Accept invite API: Invitation update result:', { updateError })
+
     if (updateError) {
       console.error('Accept invite API: Error updating invitation:', updateError)
-      // Don't fail the whole process if this fails
+      return res.status(500).json({ 
+        message: `Failed to update invitation status: ${updateError.message}` 
+      })
+    } else {
+      console.log('Accept invite API: Invitation status updated to email_confirmed (awaiting admin approval)')
     }
-
-    console.log('Accept invite API: Invitation status updated to accepted')
 
     // Create or update user profile record
     const { error: profileError } = await supabase
@@ -148,12 +201,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       console.log('Accept invite API: Profile created/updated successfully')
     }
 
+    // Create company-user association if this is an owner invitation
+    if (invitation.role === 'owner' && invitation.company_id) {
+      const { error: associationError } = await supabase
+        .from('company_users')
+        .insert({
+          user_id: userData.user.id,
+          company_id: invitation.company_id,
+          role: 'owner'
+        })
+
+      if (associationError) {
+        console.error('Accept invite API: Error creating company-user association:', associationError)
+        // Don't fail the whole process if this fails
+      } else {
+        console.log('Accept invite API: Company-user association created successfully')
+      }
+    }
+
     // Create a session for the user
     const { data: sessionData, error: sessionError } = await supabase.auth.admin.generateLink({
       type: 'magiclink',
       email: invitation.invited_email,
       options: {
-        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/dashboard`
+        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/company/create`
       }
     })
 
@@ -164,21 +235,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       console.log('Accept invite API: Session link generated successfully')
     }
 
-    // Log the invitation acceptance activity
+    // Log the invitation acceptance activity - credit to admin who sent invitation
     try {
+      // Get admin email who created the invitation
+      const { data: adminProfile } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('id', invitation.created_by)
+        .single()
+      
+      const adminEmail = adminProfile?.email || 'unknown@admin.com'
+      
       await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/activity/log`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          user_id: userData.user.id,
-          user_email: invitation.invited_email,
+          user_id: invitation.created_by, // Admin's user ID
+          user_email: adminEmail, // Admin's email
           company_id: invitation.company_id,
           action: 'INVITATION_ACCEPTED',
-          description: `User accepted invitation for ${invitation.role} role`,
+          description: `User ${invitation.invited_email} accepted invitation for ${invitation.role} role`,
           metadata: {
             invited_email: invitation.invited_email,
+            invited_user_id: userData.user.id,
             role: invitation.role,
             company_name: invitation.company_name,
             company_id: invitation.company_id,

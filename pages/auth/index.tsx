@@ -1,38 +1,8 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Invitation } from '../../types'
-
-// Window-specific storage utility using localStorage with unique window ID
-const getWindowId = () => {
-  let windowId = localStorage.getItem('windowId')
-  if (!windowId) {
-    // Create a unique window identifier using performance.now() for better uniqueness
-    windowId = `win_${Date.now()}_${performance.now()}_${Math.random().toString(36).substr(2, 9)}`
-    localStorage.setItem('windowId', windowId)
-  }
-  return windowId
-}
-
-const setTabStorage = (key: string, value: string) => {
-  const windowId = getWindowId()
-  localStorage.setItem(`${windowId}_${key}`, value)
-}
-
-const getTabStorage = (key: string) => {
-  const windowId = getWindowId()
-  return localStorage.getItem(`${windowId}_${key}`)
-}
-
-const clearTabStorage = () => {
-  const windowId = getWindowId()
-  const keys = Object.keys(localStorage)
-  keys.forEach(key => {
-    if (key.startsWith(`${windowId}_`)) {
-      localStorage.removeItem(key)
-    }
-  })
-  localStorage.removeItem('windowId')
-}
+import { validateTabSession, storeTabSession, clearTabSession, getCurrentTabId as getTabId, validateSessionWithServer } from '../../lib/sessionValidator'
+import { validateAndRefreshSession, storeEnhancedSession, handleSessionError } from '../../lib/enhancedSessionManager'
 
 export default function AuthPage() {
   const [email, setEmail] = useState('')
@@ -51,6 +21,17 @@ export default function AuthPage() {
   useEffect(() => {
     const checkUser = async () => {
       try {
+        // Check for URL parameters
+        const urlParams = new URLSearchParams(window.location.search)
+        const message = urlParams.get('message')
+        
+        if (message === 'waiting_approval') {
+          setMessage('Account created! Waiting for admin approval to login.')
+          setErrorType('admin_approval_pending')
+          // Clean up the URL
+          window.history.replaceState({}, document.title, window.location.pathname)
+        }
+        
         // Import the shared Supabase client
         const { supabase: getSupabaseClient } = await import('../../lib/supabaseClient')
         const supabase = getSupabaseClient()
@@ -62,12 +43,15 @@ export default function AuthPage() {
         const { data: { session }, error } = await supabase.auth.getSession()
         
         if (session?.user) {
-          // Check if user is admin and redirect accordingly
-          const isAdmin = getTabStorage('isAdmin') === 'true'
-          if (isAdmin) {
-            window.location.href = '/admin/dashboard'
-          } else {
-            window.location.href = '/dashboard'
+          // Check if user has a validated session and redirect accordingly
+          const tabId = getTabId()
+          const validatedSession = validateTabSession(tabId)
+          if (validatedSession) {
+            if (validatedSession.userData.isAdmin) {
+              window.location.href = '/admin/dashboard'
+            } else {
+              window.location.href = '/dashboard'
+            }
           }
         }
       } catch (error) {
@@ -120,7 +104,10 @@ export default function AuthPage() {
   const handleLogIn = async () => {
     console.log('Login form: handleLogIn called with email:', email)
     
-    if (!email || !password) {
+    const trimmedEmail = email.trim()
+    const trimmedPassword = password.trim()
+    
+    if (!trimmedEmail || !trimmedPassword) {
       setMessage('Please fill in all fields')
       return
     }
@@ -137,7 +124,7 @@ export default function AuthPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: trimmedEmail, password: trimmedPassword }),
       })
 
       const result = await response.json()
@@ -231,18 +218,30 @@ export default function AuthPage() {
         console.log('Auth: userRoles:', result.userRoles)
         
         if (result.isAdmin) {
-          // Store admin status in tab-specific session storage
+          // Store admin status in tab-specific session storage with enhanced session management
           console.log('Auth: User is admin, redirecting to admin dashboard')
-          setTabStorage('isAdmin', 'true')
-          setTabStorage('userRoles', JSON.stringify(result.userRoles || []))
+          const tabId = getTabId()
+          storeEnhancedSession(
+            tabId, 
+            result.user, 
+            result, 
+            result.session.access_token,
+            result.session.refresh_token,
+            result.session.expires_at ? result.session.expires_at * 1000 : undefined
+          )
           window.location.href = '/admin/dashboard'
         } else {
-          // Store user role information in tab-specific session storage
+          // Store user role information in tab-specific session storage with enhanced session management
           console.log('Auth: User is not admin, redirecting to regular dashboard')
-          setTabStorage('isAdmin', 'false')
-          setTabStorage('isOwner', result.isOwner ? 'true' : 'false')
-          setTabStorage('hasCompany', result.hasCompany ? 'true' : 'false')
-          setTabStorage('userRoles', JSON.stringify(result.userRoles || []))
+          const tabId = getTabId()
+          storeEnhancedSession(
+            tabId, 
+            result.user, 
+            result, 
+            result.session.access_token,
+            result.session.refresh_token,
+            result.session.expires_at ? result.session.expires_at * 1000 : undefined
+          )
           window.location.href = '/dashboard'
         }
       }
@@ -374,7 +373,7 @@ export default function AuthPage() {
       // Use the correct join URL pattern
       const invitationLink = `${window.location.origin}/join/${currentInvite.token}`
       
-      const response = await fetch('/api/send-invite-email', {
+      const response = await fetch('/api/resend-invite-email', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -423,7 +422,7 @@ export default function AuthPage() {
       const result = await response.json()
 
       if (response.ok) {
-        setMessage('Admin notification sent successfully! The administrator has been notified of your approval request and will receive an email with a direct link to approve your account.')
+        setMessage('Admin notification sent! The administrator will receive an email to approve your account.')
       } else {
         setMessage(`Error: ${result.message || 'Failed to send notification'}`)
       }
@@ -637,14 +636,14 @@ export default function AuthPage() {
                 )}
                 
                 {/* Notify Admin Button */}
-                {errorType === 'admin_approval_pending' && currentInvite && (
+                {errorType === 'admin_approval_pending' && (
                   <div className="mt-3">
                     <button
                       onClick={handleNotifyAdmin}
                       disabled={notifyingAdmin}
                       className="w-full bg-blue-600 text-white px-3 py-2 rounded text-sm hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {notifyingAdmin ? 'Sending Request...' : 'Request Admin Approval'}
+                      {notifyingAdmin ? 'Sending Request...' : 'Email Admin for Approval'}
                     </button>
                   </div>
                 )}

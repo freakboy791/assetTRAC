@@ -1,37 +1,62 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { validateTabSession, storeTabSession, clearTabSession, getCurrentTabId as getTabId, validateSessionWithServer } from '../../lib/sessionValidator'
+import { useSessionTimeout } from '../../lib/useSessionTimeout'
+import SessionTimeoutWarning from '../../components/SessionTimeoutWarning'
 
-// Window-specific storage utility using localStorage with unique window ID
-const getWindowId = () => {
-  let windowId = localStorage.getItem('windowId')
-  if (!windowId) {
-    // Create a unique window identifier using performance.now() for better uniqueness
-    windowId = `win_${Date.now()}_${performance.now()}_${Math.random().toString(36).substr(2, 9)}`
-    localStorage.setItem('windowId', windowId)
-  }
-  return windowId
-}
-
-const setTabStorage = (key: string, value: string) => {
-  const windowId = getWindowId()
-  localStorage.setItem(`${windowId}_${key}`, value)
-}
-
-const getTabStorage = (key: string) => {
-  const windowId = getWindowId()
-  return localStorage.getItem(`${windowId}_${key}`)
-}
-
-const clearTabStorage = () => {
-  const windowId = getWindowId()
-  const keys = Object.keys(localStorage)
-  keys.forEach(key => {
-    if (key.startsWith(`${windowId}_`)) {
-      localStorage.removeItem(key)
-    }
-  })
-  localStorage.removeItem('windowId')
-}
+// US States data for dropdown
+const US_STATES = [
+  { code: 'AL', name: 'Alabama' },
+  { code: 'AK', name: 'Alaska' },
+  { code: 'AZ', name: 'Arizona' },
+  { code: 'AR', name: 'Arkansas' },
+  { code: 'CA', name: 'California' },
+  { code: 'CO', name: 'Colorado' },
+  { code: 'CT', name: 'Connecticut' },
+  { code: 'DE', name: 'Delaware' },
+  { code: 'FL', name: 'Florida' },
+  { code: 'GA', name: 'Georgia' },
+  { code: 'HI', name: 'Hawaii' },
+  { code: 'ID', name: 'Idaho' },
+  { code: 'IL', name: 'Illinois' },
+  { code: 'IN', name: 'Indiana' },
+  { code: 'IA', name: 'Iowa' },
+  { code: 'KS', name: 'Kansas' },
+  { code: 'KY', name: 'Kentucky' },
+  { code: 'LA', name: 'Louisiana' },
+  { code: 'ME', name: 'Maine' },
+  { code: 'MD', name: 'Maryland' },
+  { code: 'MA', name: 'Massachusetts' },
+  { code: 'MI', name: 'Michigan' },
+  { code: 'MN', name: 'Minnesota' },
+  { code: 'MS', name: 'Mississippi' },
+  { code: 'MO', name: 'Missouri' },
+  { code: 'MT', name: 'Montana' },
+  { code: 'NE', name: 'Nebraska' },
+  { code: 'NV', name: 'Nevada' },
+  { code: 'NH', name: 'New Hampshire' },
+  { code: 'NJ', name: 'New Jersey' },
+  { code: 'NM', name: 'New Mexico' },
+  { code: 'NY', name: 'New York' },
+  { code: 'NC', name: 'North Carolina' },
+  { code: 'ND', name: 'North Dakota' },
+  { code: 'OH', name: 'Ohio' },
+  { code: 'OK', name: 'Oklahoma' },
+  { code: 'OR', name: 'Oregon' },
+  { code: 'PA', name: 'Pennsylvania' },
+  { code: 'RI', name: 'Rhode Island' },
+  { code: 'SC', name: 'South Carolina' },
+  { code: 'SD', name: 'South Dakota' },
+  { code: 'TN', name: 'Tennessee' },
+  { code: 'TX', name: 'Texas' },
+  { code: 'UT', name: 'Utah' },
+  { code: 'VT', name: 'Vermont' },
+  { code: 'VA', name: 'Virginia' },
+  { code: 'WA', name: 'Washington' },
+  { code: 'WV', name: 'West Virginia' },
+  { code: 'WI', name: 'Wisconsin' },
+  { code: 'WY', name: 'Wyoming' }
+]
 
 export default function CompanyManagePage() {
   const [user, setUser] = useState<any>(null)
@@ -54,54 +79,149 @@ export default function CompanyManagePage() {
     email: '',
     depreciation_rate: 0
   })
+  const [stateError, setStateError] = useState('')
+  const [zipError, setZipError] = useState('')
+  const [phoneError, setPhoneError] = useState('')
+
+  // Session timeout management
+  const {
+    showWarning,
+    timeRemainingFormatted,
+    extendSession,
+    dismissWarning
+  } = useSessionTimeout({
+    timeoutMinutes: 30,
+    warningMinutes: 5,
+    enabled: !loading && !!user
+  })
+
+  // Validation functions
+  const validateState = (state: string) => {
+    if (!state) {
+      setStateError('State is required')
+      return false
+    }
+    if (state.length !== 2) {
+      setStateError('State must be a 2-letter code (e.g., CA, NY)')
+      return false
+    }
+    const validState = US_STATES.find(s => s.code === state.toUpperCase())
+    if (!validState) {
+      setStateError('Please enter a valid 2-letter state code')
+      return false
+    }
+    setStateError('')
+    return true
+  }
+
+  const validateZipCode = (zip: string) => {
+    if (!zip) {
+      setZipError('ZIP code is required')
+      return false
+    }
+    // US ZIP code pattern: exactly 5 digits
+    const zipPattern = /^\d{5}$/
+    if (!zipPattern.test(zip)) {
+      setZipError('Please enter a valid 5-digit ZIP code (e.g., 12345)')
+      return false
+    }
+    setZipError('')
+    return true
+  }
+
+  const validatePhoneNumber = (phone: string) => {
+    if (!phone) {
+      setPhoneError('Phone number is required')
+      return false
+    }
+    // Remove all non-digit characters for validation
+    const digitsOnly = phone.replace(/\D/g, '')
+    if (digitsOnly.length !== 10) {
+      setPhoneError('Phone number must be 10 digits')
+      return false
+    }
+    setPhoneError('')
+    return true
+  }
+
+  const handleStateChange = (value: string) => {
+    setCompanyData(prev => ({
+      ...prev,
+      state: value.toUpperCase()
+    }))
+    validateState(value.toUpperCase())
+  }
+
+  const handleZipChange = (value: string) => {
+    // Only allow digits, limit to 5 digits
+    const digitsOnly = value.replace(/\D/g, '')
+    const limitedDigits = digitsOnly.slice(0, 5)
+    setCompanyData(prev => ({
+      ...prev,
+      zip: limitedDigits
+    }))
+    validateZipCode(limitedDigits)
+  }
+
+  const handlePhoneChange = (value: string) => {
+    // Remove all non-digit characters
+    const digitsOnly = value.replace(/\D/g, '')
+    
+    // Limit to 10 digits
+    const limitedDigits = digitsOnly.slice(0, 10)
+    
+    // Format as (xxx)-xxx-xxxx
+    let formatted = ''
+    if (limitedDigits.length > 0) {
+      if (limitedDigits.length <= 3) {
+        formatted = `(${limitedDigits}`
+      } else if (limitedDigits.length <= 6) {
+        formatted = `(${limitedDigits.slice(0, 3)})-${limitedDigits.slice(3)}`
+      } else {
+        formatted = `(${limitedDigits.slice(0, 3)})-${limitedDigits.slice(3, 6)}-${limitedDigits.slice(6)}`
+      }
+    }
+    
+    setCompanyData(prev => ({
+      ...prev,
+      phone: formatted
+    }))
+    validatePhoneNumber(formatted)
+  }
+
 
   useEffect(() => {
     const checkUser = async () => {
+      console.log('Company Manage: Checking if user is already logged in...')
+      console.log('Company Manage: Current tab ID:', getTabId())
+      
       try {
-        // Import the shared Supabase client
-        const { supabase: getSupabaseClient } = await import('../../lib/supabaseClient')
-        const supabase = getSupabaseClient()
+        // Check if this tab already has a validated session
+        const tabId = getTabId()
+        const validatedSession = validateTabSession(tabId)
         
-        const { data: { session }, error } = await supabase.auth.getSession()
-        
-        if (error || !session?.user) {
-          window.location.href = '/'
+        if (validatedSession) {
+          setUser(validatedSession.user)
+          setIsAdmin(validatedSession.userData.isAdmin || false)
+          setIsOwner(validatedSession.userData.isOwner || false)
+          setIsManager(validatedSession.userData.roles?.includes('manager') || false)
+          setUserRoles(validatedSession.userData.roles || [])
+          setLoading(false)
+          
+          // Load company data for this tab
+          await loadCompanyData()
+          
           return
         }
 
-        setUser(session.user)
-        
-        // Get role information from tab-specific session storage
-        const storedRoles = getTabStorage('userRoles')
-        const storedIsOwner = getTabStorage('isOwner')
-        const storedIsAdmin = getTabStorage('isAdmin')
-        
-        let roles: string[] = []
-        let isOwnerRole = false
-        let isAdminRole = false
-
-        if (storedRoles) {
-          roles = JSON.parse(storedRoles)
-          isOwnerRole = storedIsOwner === 'true'
-          isAdminRole = storedIsAdmin === 'true'
-        } else {
-          // Fallback: check user metadata if session storage is empty
-          const userMetadata = session.user.user_metadata
-          roles = userMetadata?.roles || []
-          isOwnerRole = userMetadata?.isOwner || false
-          isAdminRole = userMetadata?.isAdmin || false
-        }
-
-        setUserRoles(roles)
-        setIsOwner(isOwnerRole)
-        setIsAdmin(isAdminRole)
-        setIsManager(roles.includes('manager'))
-        
-        await loadCompanyData()
-        setLoading(false)
+        // If no validated session, redirect to login
+        window.location.href = '/'
+        return
       } catch (error) {
         console.error('Error checking user:', error)
         window.location.href = '/'
+      } finally {
+        setLoading(false)
       }
     }
 
@@ -110,31 +230,27 @@ export default function CompanyManagePage() {
 
   const loadCompanyData = async () => {
     try {
-      // Get the session to get the access token
-      const { supabase: getSupabaseClient } = await import('../../lib/supabaseClient')
-      const supabase = getSupabaseClient()
+      // Get the current tab-specific session token
+      const tabId = getTabId()
+      const validatedSession = validateTabSession(tabId)
       
-      // Force a fresh session check to ensure we have the right user
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-      
-      if (sessionError || !session?.access_token) {
-        console.log('Company Manage: No valid session, redirecting to login')
-        window.location.href = '/'
+      if (!validatedSession || !validatedSession.accessToken) {
+        console.error('No valid session token found for loading company data.')
         return
       }
 
-      console.log('Company Manage: Loading company data for user:', session.user?.email)
-      console.log('Company Manage: User ID:', session.user?.id)
-      console.log('Company Manage: Window ID:', getWindowId())
-
       const response = await fetch('/api/company/get', {
         headers: {
-          'Authorization': `Bearer ${session.access_token}`
+          'Authorization': `Bearer ${validatedSession.accessToken}`
         }
       })
-      const data = await response.json()
       
-      console.log('Company Manage: Company data received:', data)
+      if (!response.ok) {
+        console.error('API call failed:', response.status, response.statusText)
+        return
+      }
+      
+      const data = await response.json()
       
       if (data.company) {
         setCompany(data.company)
@@ -157,9 +273,11 @@ export default function CompanyManagePage() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
+    // Trim text fields but not numeric fields
+    const trimmedValue = (name === 'depreciation_rate') ? value : value.trim()
     setCompanyData(prev => ({
       ...prev,
-      [name]: value
+      [name]: trimmedValue
     }))
   }
 
@@ -176,30 +294,36 @@ export default function CompanyManagePage() {
       return
     }
 
+    // Validate all required fields
+    const isStateValid = validateState(companyData.state)
+    const isZipValid = validateZipCode(companyData.zip)
+    const isPhoneValid = validatePhoneNumber(companyData.phone)
+    
+    if (!isStateValid || !isZipValid || !isPhoneValid) {
+      setMessage('Please fix the validation errors below')
+      return
+    }
+
     console.log('Submitting company data:', companyData)
     setSubmitting(true)
     setMessage('')
 
     try {
-      // Get the session to get the access token
-      const { supabase: getSupabaseClient } = await import('../../lib/supabaseClient')
-      const supabase = getSupabaseClient()
-      const { data: { session } } = await supabase.auth.getSession()
+      // Get the current tab-specific session token
+      const tabId = getTabId()
+      const validatedSession = validateTabSession(tabId)
       
-      if (!session?.access_token) {
+      if (!validatedSession || !validatedSession.accessToken) {
         setMessage('No valid session found')
         return
       }
 
-      console.log('Company Manage: Saving company data for user:', session.user?.email)
-      console.log('Company Manage: User ID:', session.user?.id)
-      console.log('Company Manage: Company data to save:', companyData)
 
       const response = await fetch('/api/company/save', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
+          'Authorization': `Bearer ${validatedSession.accessToken}`
         },
         body: JSON.stringify(companyData)
       })
@@ -278,7 +402,7 @@ export default function CompanyManagePage() {
                   onClick={() => window.location.href = isAdmin ? '/admin/dashboard' : '/dashboard'}
                   className="bg-gray-600 text-white px-3 py-1.5 rounded-md text-xs hover:bg-gray-700 transition-colors"
                 >
-                  Back to Dashboard
+                  Back
                 </button>
               </div>
             </div>
@@ -328,7 +452,7 @@ export default function CompanyManagePage() {
                 onClick={() => window.location.href = isAdmin ? '/admin/dashboard' : '/dashboard'}
                 className="bg-gray-600 text-white px-4 py-2 rounded-md text-sm hover:bg-gray-700 transition-colors"
               >
-                Back to Dashboard
+                Back
               </button>
               <button
                 onClick={handleSignOut}
@@ -484,40 +608,54 @@ export default function CompanyManagePage() {
 
                       <div>
                         <label htmlFor="state" className="block text-sm font-medium text-gray-600">
-                          State
+                          State *
                         </label>
-                        <input
-                          type="text"
+                        <select
                           name="state"
                           id="state"
                           value={companyData.state}
-                          onChange={handleInputChange}
+                          onChange={(e) => handleStateChange(e.target.value)}
                           disabled={!isEditing || !canEditCompany()}
                           className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-800 ${
                             isEditing && canEditCompany()
-                              ? 'border-gray-300' 
+                              ? stateError ? 'border-red-300' : 'border-gray-300'
                               : 'border-gray-200 bg-gray-50 cursor-not-allowed'
                           }`}
-                        />
+                        >
+                          <option value="">Select a state</option>
+                          {US_STATES.map((state) => (
+                            <option key={state.code} value={state.code}>
+                              {state.code} - {state.name}
+                            </option>
+                          ))}
+                        </select>
+                        {stateError && (
+                          <p className="mt-1 text-sm text-red-600">{stateError}</p>
+                        )}
                       </div>
 
                       <div>
                         <label htmlFor="zip" className="block text-sm font-medium text-gray-600">
-                          ZIP Code
+                          ZIP Code *
                         </label>
                         <input
                           type="text"
                           name="zip"
                           id="zip"
                           value={companyData.zip}
-                          onChange={handleInputChange}
+                          onChange={(e) => handleZipChange(e.target.value)}
                           disabled={!isEditing || !canEditCompany()}
                           className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-800 ${
                             isEditing && canEditCompany()
-                              ? 'border-gray-300' 
+                              ? zipError ? 'border-red-300' : 'border-gray-300'
                               : 'border-gray-200 bg-gray-50 cursor-not-allowed'
                           }`}
+                          placeholder="12345"
+                          maxLength={5}
                         />
+                        {zipError && (
+                          <p className="mt-1 text-sm text-red-600">{zipError}</p>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -527,21 +665,26 @@ export default function CompanyManagePage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label htmlFor="phone" className="block text-sm font-medium text-gray-700">
-                      Phone
+                      Phone *
                     </label>
                     <input
                       type="tel"
                       name="phone"
                       id="phone"
                       value={companyData.phone}
-                      onChange={handleInputChange}
+                      onChange={(e) => handlePhoneChange(e.target.value)}
                       disabled={!isEditing || !canEditCompany()}
                       className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-800 ${
                         isEditing && canEditCompany()
-                          ? 'border-gray-300' 
+                          ? phoneError ? 'border-red-300' : 'border-gray-300'
                           : 'border-gray-200 bg-gray-50 cursor-not-allowed'
                       }`}
+                      placeholder="(555) 123-4567"
+                      maxLength={14}
                     />
+                    {phoneError && (
+                      <p className="mt-1 text-sm text-red-600">{phoneError}</p>
+                    )}
                   </div>
 
                   <div>
@@ -609,6 +752,14 @@ export default function CompanyManagePage() {
           </div>
         </div>
       </div>
+      
+      {/* Session Timeout Warning */}
+      <SessionTimeoutWarning
+        show={showWarning}
+        timeRemaining={timeRemainingFormatted}
+        onExtend={extendSession}
+        onDismiss={dismissWarning}
+      />
     </div>
   )
 }

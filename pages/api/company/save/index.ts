@@ -20,6 +20,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'Company data is required' })
   }
 
+  // Trim all string fields to prevent trailing spaces
+  const trimmedData = {
+    ...companyData,
+    name: companyData.name?.trim(),
+    street: companyData.street?.trim(),
+    city: companyData.city?.trim(),
+    state: companyData.state?.trim(),
+    zip: companyData.zip?.trim(),
+    phone: companyData.phone?.trim(),
+    email: companyData.email?.trim(),
+    note: companyData.note?.trim()
+  }
+
   try {
     console.log('Company save API: Received data:', companyData)
     
@@ -60,14 +73,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.log('Company save API: Updating user company with ID:', companyUsers.company_id)
       
     const updateData = {
-      name: companyData.name,
-      street: companyData.street,
-      city: companyData.city,
-      state: companyData.state,
-      zip: companyData.zip,
-      phone: companyData.phone,
-      email: companyData.email,
-      depreciation_rate: companyData.depreciation_rate
+      name: trimmedData.name,
+      street: trimmedData.street,
+      city: trimmedData.city,
+      state: trimmedData.state,
+      zip: trimmedData.zip,
+      phone: trimmedData.phone,
+      email: trimmedData.email,
+      depreciation_rate: trimmedData.depreciation_rate
     }
     
     console.log('Company save API: Update data:', updateData)

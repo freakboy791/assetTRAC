@@ -80,80 +80,79 @@ export default function JoinPage() {
     setMessage('')
 
     try {
-      const response = await fetch('/api/invite/accept', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          token: window.location.pathname.split('/').pop(),
-          password: password,
-        }),
-      })
-
-      const data = await response.json()
-      console.log('Invitation acceptance response:', data)
-
-      if (response.ok) {
-        setMessage('Account created successfully! Signing you in...')
+      // For owners, accept invitation first, then redirect to company setup
+      if (invitation && invitation.role === 'owner') {
+        setMessage('Accepting invitation and redirecting to company setup...')
         
-        // Sign in the user with the credentials they just created
-        try {
-          const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-            email: email,
-            password: password
-          })
+        // Accept the invitation first
+        const response = await fetch('/api/invite/accept', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            token: window.location.pathname.split('/').pop(),
+            password: password,
+          }),
+        })
 
-          if (signInError) {
-            console.error('Sign in error:', signInError)
-            setMessage('Account created but sign in failed. Please try logging in manually.')
-            return
+        const data = await response.json()
+        console.log('Invitation acceptance response:', data)
+
+        if (response.ok) {
+          // Store invitation data in session storage for company setup
+          const invitationData = {
+            email: invitation.invited_email,
+            companyName: invitation.company_name,
+            role: invitation.role,
+            token: window.location.pathname.split('/').pop(),
+            password: password // Store password for later use
           }
-
-          console.log('User signed in successfully:', signInData.user?.email)
           
-          // Store role information in session storage
-          if (data.userRoles) {
-            sessionStorage.setItem('userRoles', JSON.stringify(data.userRoles))
-          }
-          if (data.isAdmin !== undefined) {
-            sessionStorage.setItem('isAdmin', data.isAdmin.toString())
-          }
-          if (data.isOwner !== undefined) {
-            sessionStorage.setItem('isOwner', data.isOwner.toString())
-          }
-          if (data.hasCompany !== undefined) {
-            sessionStorage.setItem('hasCompany', data.hasCompany.toString())
-          }
-
-          console.log('Role data stored:', {
-            userRoles: data.userRoles,
-            isAdmin: data.isAdmin,
-            isOwner: data.isOwner,
-            hasCompany: data.hasCompany
-          })
-
-          // Redirect based on role
-          console.log('About to redirect...')
+          console.log('Join page: Storing invitation data:', invitationData)
+          sessionStorage.setItem('invitationData', JSON.stringify(invitationData))
           
-          if (data.isOwner === true) {
-            console.log('Redirecting to company creation page...')
+          // Verify it was stored
+          const storedData = sessionStorage.getItem('invitationData')
+          console.log('Join page: Verification - stored data:', storedData)
+          
+          // Redirect to company setup for owners
+          setTimeout(() => {
+            console.log('Join page: Redirecting to company creation page...')
             window.location.href = '/company/create'
-          } else {
-            console.log('Redirecting to dashboard...')
-            window.location.href = '/dashboard'
-          }
-        } catch (signInError) {
-          console.error('Sign in error:', signInError)
-          setMessage('Account created but sign in failed. Please try logging in manually.')
+          }, 2000)
+        } else {
+          setMessage(data.message || 'Failed to accept invitation')
         }
       } else {
-        console.error('Account creation failed:', data.message)
-        setMessage(data.message || 'Failed to create account')
+        // For non-owners, use the original flow
+        const response = await fetch('/api/invite/accept', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            token: window.location.pathname.split('/').pop(),
+            password: password,
+          }),
+        })
+
+        const data = await response.json()
+        console.log('Invitation acceptance response:', data)
+
+        if (response.ok) {
+          setMessage('Account created successfully! Redirecting to dashboard...')
+          setTimeout(() => {
+            window.location.href = '/dashboard'
+          }, 2000)
+        } else {
+          console.error('Account creation failed:', data.message)
+          setMessage(data.message || 'Failed to create account')
+        }
       }
     } catch (error) {
-      console.error('Error creating account:', error)
-      setMessage('Failed to create account. Please try again.')
+      console.error('Error processing invitation:', error)
+      setMessage('Failed to process invitation. Please try again.')
     } finally {
       setSubmitting(false)
     }

@@ -1,37 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Invitation } from '../../../types'
-
-// Window-specific storage utility using localStorage with unique window ID
-const getWindowId = () => {
-  let windowId = localStorage.getItem('windowId')
-  if (!windowId) {
-    // Create a unique window identifier using performance.now() for better uniqueness
-    windowId = `win_${Date.now()}_${performance.now()}_${Math.random().toString(36).substr(2, 9)}`
-    localStorage.setItem('windowId', windowId)
-  }
-  return windowId
-}
-
-const setTabStorage = (key: string, value: string) => {
-  const windowId = getWindowId()
-  localStorage.setItem(`${windowId}_${key}`, value)
-}
-
-const getTabStorage = (key: string) => {
-  const windowId = getWindowId()
-  return localStorage.getItem(`${windowId}_${key}`)
-}
-
-const clearTabStorage = () => {
-  const windowId = getWindowId()
-  const keys = Object.keys(localStorage)
-  keys.forEach(key => {
-    if (key.startsWith(`${windowId}_`)) {
-      localStorage.removeItem(key)
-    }
-  })
-  localStorage.removeItem('windowId')
-}
+import { validateAndRefreshSession, storeEnhancedSession, handleSessionError, getCurrentTabId as getTabId } from '../../../lib/enhancedSessionManager'
+import { useSessionTimeout } from '../../../lib/useSessionTimeout'
+import SessionTimeoutWarning from '../../../components/SessionTimeoutWarning'
 
 export default function AdminInvitePage() {
   const [invitedEmail, setInvitedEmail] = useState('')
@@ -39,10 +10,22 @@ export default function AdminInvitePage() {
   const [personalMessage, setPersonalMessage] = useState('')
   const [userRole, setUserRole] = useState('')
   const [statusMessage, setStatusMessage] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [user, setUser] = useState<any>(null)
   const [isAdmin, setIsAdmin] = useState(false)
   const [userRoles, setUserRoles] = useState<string[]>([])
+
+  // Session timeout management
+  const {
+    showWarning,
+    timeRemainingFormatted,
+    extendSession,
+    dismissWarning
+  } = useSessionTimeout({
+    timeoutMinutes: 30,
+    warningMinutes: 5,
+    enabled: !loading && !!user
+  })
 
   const getRoleDescription = (role: string) => {
     switch (role) {
@@ -79,9 +62,14 @@ export default function AdminInvitePage() {
       { value: 'owner', label: 'Owner' }
     ]
 
-    // Admin and Owner can invite any role (except admin)
-    if (userRoles.includes('admin') || userRoles.includes('owner')) {
-      return allRoles // Admin and Owner can invite all roles
+    // Admin can invite any role (except admin)
+    if (userRoles.includes('admin')) {
+      return allRoles // Admin can invite all roles
+    }
+    
+    // Owner can invite any role below them (no admin, no other owners)
+    if (userRoles.includes('owner')) {
+      return allRoles.filter(role => role.value !== 'owner') // Owner cannot invite other owners
     }
     
     // Manager can only invite tech and viewer roles (all sub-types)
@@ -100,43 +88,28 @@ export default function AdminInvitePage() {
   useEffect(() => {
     const checkUser = async () => {
       try {
-        // Import the shared Supabase client
-        const { supabase: getSupabaseClient } = await import('../../../lib/supabaseClient')
-        const supabase = getSupabaseClient()
+        // Check if this tab already has a validated session with enhanced validation
+        const tabId = getTabId()
+        const { session: validatedSession, error: sessionError } = await validateAndRefreshSession(tabId)
         
-        const { data: { session }, error } = await supabase.auth.getSession()
-        
-        if (!session?.user) {
-          window.location.href = '/'
+        if (sessionError || !validatedSession) {
+          console.error('Admin Invite: Session validation failed:', sessionError?.message)
+          handleSessionError(sessionError)
           return
         }
-
-        setUser(session.user)
-
-        // Get role information from tab-specific session storage
-        const storedRoles = getTabStorage('userRoles')
-        const storedIsAdmin = getTabStorage('isAdmin')
         
-        let roles: string[] = []
-        let isAdminRole = false
-
-        if (storedRoles) {
-          roles = JSON.parse(storedRoles)
-          isAdminRole = storedIsAdmin === 'true'
-        } else {
-          // Fallback: check user metadata if session storage is empty
-          const userMetadata = session.user.user_metadata
-          roles = userMetadata?.roles || []
-          isAdminRole = userMetadata?.isAdmin || false
-        }
-
-        setUserRoles(roles)
-        setIsAdmin(isAdminRole)
-
+        // Get user data from the session
+        const userData = validatedSession.userData || {}
+        
+        setUser(validatedSession.user)
+        setIsAdmin(userData.isAdmin || false)
+        setUserRoles(userData.roles || [])
+        setLoading(false)
+        
         // Check if user has permission to send invitations
-        const canSendInvitations = isAdminRole || 
-                                  roles.includes('owner') || 
-                                  roles.some(role => role.startsWith('manager'))
+        const canSendInvitations = userData.isAdmin || 
+                                  userData.isOwner || 
+                                  userData.roles?.some(role => role.startsWith('manager'))
         if (!canSendInvitations) {
           setStatusMessage('You do not have permission to send invitations')
           // Redirect to dashboard after showing message
@@ -146,7 +119,10 @@ export default function AdminInvitePage() {
           return
         }
       } catch (error) {
+        console.error('Error checking user:', error)
         window.location.href = '/'
+      } finally {
+        setLoading(false)
       }
     }
 
@@ -154,8 +130,16 @@ export default function AdminInvitePage() {
   }, [])
 
   const getDefaultRole = (currentUserRoles: string[], availableRoles: any[]) => {
-    // If user is admin or owner, default to manager-both
-    if (currentUserRoles.includes('admin') || currentUserRoles.includes('owner')) {
+    // If user is admin, default to owner
+    if (currentUserRoles.includes('admin')) {
+      return availableRoles.find(role => role.value === 'owner')?.value || 
+             availableRoles.find(role => role.value === 'manager-both')?.value || 
+             availableRoles.find(role => role.value.startsWith('manager-'))?.value || 
+             availableRoles[0]?.value || ''
+    }
+    
+    // If user is owner, default to manager-both
+    if (currentUserRoles.includes('owner')) {
       return availableRoles.find(role => role.value === 'manager-both')?.value || 
              availableRoles.find(role => role.value.startsWith('manager-'))?.value || 
              availableRoles[0]?.value || ''
@@ -191,15 +175,26 @@ export default function AdminInvitePage() {
     setStatusMessage('')
 
     try {
+      // Get the current tab-specific session token with enhanced validation
+      const tabId = getTabId()
+      const { session: validatedSession, error: sessionError } = await validateAndRefreshSession(tabId)
+      
+      if (sessionError || !validatedSession || !validatedSession.accessToken) {
+        console.error('Admin Invite: No valid session found:', sessionError?.message)
+        setStatusMessage('Error: No valid session found. Please log in again.')
+        return
+      }
+
       const response = await fetch('/api/send-invite-email', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${validatedSession.accessToken}`
         },
         body: JSON.stringify({
-          email: invitedEmail,
-          companyName: companyName,
-          message: personalMessage || null,
+          email: invitedEmail.trim(),
+          companyName: companyName.trim(),
+          message: personalMessage ? personalMessage.trim() : null,
           role: userRole
         })
       })
@@ -207,18 +202,25 @@ export default function AdminInvitePage() {
       const result = await response.json()
 
       if (response.ok) {
-        setStatusMessage(`Invitation sent successfully to ${invitedEmail}!`)
+        setStatusMessage(`Invitation created successfully for ${invitedEmail}!`)
+        
+        // Show the invitation link if provided
+        if (result.invitationLink) {
+          setStatusMessage(prev => prev + ` Invitation link: ${result.invitationLink}`)
+        }
+        
+        // Clear form
         setInvitedEmail('')
         setCompanyName('')
         setPersonalMessage('')
         const availableRoles = getAvailableRoles(userRoles)
         const defaultRole = getDefaultRole(userRoles, availableRoles)
         setUserRole(defaultRole)
-        
-        // Redirect to dashboard after 2 seconds to show the success message
+      
+        // Redirect to admin dashboard after a short delay to show the success message
         setTimeout(() => {
-          window.location.href = '/dashboard'
-        }, 2000)
+          window.location.href = '/admin/dashboard?refresh=invitations'
+        }, 3000)
       } else {
         setStatusMessage(`Error: ${result.message}`)
       }
@@ -267,7 +269,7 @@ export default function AdminInvitePage() {
           <div className="block sm:hidden py-4">
             <div className="flex justify-between items-start">
               <div className="flex flex-col space-y-1">
-                <div className="flex items-center">
+            <div className="flex items-center">
                   <div className="h-6 w-6 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full flex items-center justify-center mr-2">
                     <span className="text-xs font-bold text-white">AT</span>
                   </div>
@@ -312,12 +314,12 @@ export default function AdminInvitePage() {
                 >
                   Sign Out
                 </button>
-                <button
+              <button
                   onClick={() => window.location.href = isAdmin ? '/admin/dashboard' : '/dashboard'}
                   className="bg-gray-600 text-white px-3 py-1.5 rounded-md text-xs hover:bg-gray-700 transition-colors"
-                >
-                  Back to Dashboard
-                </button>
+              >
+                  Back
+              </button>
               </div>
             </div>
           </div>
@@ -368,7 +370,7 @@ export default function AdminInvitePage() {
                 onClick={() => window.location.href = isAdmin ? '/admin/dashboard' : '/dashboard'}
                 className="bg-gray-600 text-white px-4 py-2 rounded-md text-sm hover:bg-gray-700 transition-colors"
               >
-                Back to Dashboard
+                Back
               </button>
               <button
                 onClick={handleSignOut}
@@ -388,29 +390,29 @@ export default function AdminInvitePage() {
             <ol className="flex items-center space-x-4">
               <li>
                 <div>
-                  <button
+            <button
                     onClick={() => window.location.href = '/admin/dashboard'}
                     className="text-gray-400 hover:text-gray-500"
-                  >
+            >
                     <svg className="flex-shrink-0 h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
                       <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
                     </svg>
                     <span className="sr-only">Dashboard</span>
-                  </button>
+            </button>
                 </div>
               </li>
               <li>
                 <div className="flex items-center">
                   <svg className="flex-shrink-0 h-5 w-5 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                  </svg>
+            </svg>
                   <span className="ml-4 text-sm font-medium text-gray-500">Send Invitation</span>
                 </div>
               </li>
             </ol>
           </nav>
+          </div>
         </div>
-      </div>
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8 pt-40 sm:pt-36">
@@ -425,49 +427,49 @@ export default function AdminInvitePage() {
               </div>
               
               <div className="px-6 py-6 space-y-6">
-                <div>
-                  <label htmlFor="invitedEmail" className="block text-sm font-medium text-gray-700">
+              <div>
+                <label htmlFor="invitedEmail" className="block text-sm font-medium text-gray-700">
                     Email Address *
-                  </label>
-                  <input
-                    type="email"
-                    id="invitedEmail"
-                    value={invitedEmail}
-                    onChange={(e) => setInvitedEmail(e.target.value)}
+                </label>
+                <input
+                  type="email"
+                  id="invitedEmail"
+                  value={invitedEmail}
+                  onChange={(e) => setInvitedEmail(e.target.value)}
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-800"
                     placeholder="user@example.com"
-                    required
-                  />
-                </div>
+                  required
+                />
+              </div>
 
-                <div>
-                  <label htmlFor="companyName" className="block text-sm font-medium text-gray-700">
+              <div>
+                <label htmlFor="companyName" className="block text-sm font-medium text-gray-700">
                     Company Name *
-                  </label>
-                  <input
-                    type="text"
-                    id="companyName"
-                    value={companyName}
-                    onChange={(e) => setCompanyName(e.target.value)}
+                </label>
+                <input
+                  type="text"
+                  id="companyName"
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-800"
                     placeholder="Your Company Name"
-                    required
-                  />
-                </div>
+                  required
+                />
+              </div>
 
-                <div>
+              <div>
                   <label htmlFor="personalMessage" className="block text-sm font-medium text-gray-700">
-                    Personal Message (Optional)
-                  </label>
-                  <textarea
+                  Personal Message (Optional)
+                </label>
+                <textarea
                     id="personalMessage"
                     rows={3}
-                    value={personalMessage}
-                    onChange={(e) => setPersonalMessage(e.target.value)}
+                  value={personalMessage}
+                  onChange={(e) => setPersonalMessage(e.target.value)}
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-800"
                     placeholder="Add a personal message to the invitation..."
-                  />
-                </div>
+                />
+              </div>
 
                 <div>
                   <label htmlFor="userRole" className="block text-sm font-medium text-gray-700">
@@ -501,26 +503,34 @@ export default function AdminInvitePage() {
                   </div>
                 )}
 
-                <div className="flex justify-end space-x-3">
-                  <button
+              <div className="flex justify-end space-x-3">
+                <button
                     onClick={() => window.location.href = '/dashboard'}
                     className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                  >
-                    Cancel
-                  </button>
-                  <button
+                >
+                  Cancel
+                </button>
+                <button
                     onClick={handleSendInvite}
-                    disabled={loading}
+                  disabled={loading}
                     className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {loading ? 'Sending...' : 'Send Invitation'}
-                  </button>
-                </div>
+                >
+                  {loading ? 'Sending...' : 'Send Invitation'}
+                </button>
               </div>
-            </div>
+              </div>
+              </div>
           </div>
         </div>
       </main>
+      
+      {/* Session Timeout Warning */}
+      <SessionTimeoutWarning
+        show={showWarning}
+        timeRemaining={timeRemainingFormatted}
+        onExtend={extendSession}
+        onDismiss={dismissWarning}
+      />
     </div>
   )
 }

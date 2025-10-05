@@ -31,48 +31,59 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const isViewer = roles.some((role: string) => role.startsWith('viewer'))
       const isTech = roles.includes('tech')
 
+      // Debug logging for role detection
       console.log('Activity Log API: Role analysis:', {
-        user_email,
-        user_roles,
         roles,
         isAdmin,
         isOwner,
         isManager,
         isViewer,
-        isTech
+        isTech,
+        user_email
       })
+
+      // Filter out regular login events and admin login events
+      // Only keep first login events (USER_FIRST_LOGIN and ACCOUNT_SETUP_COMPLETED)
+      query = query.neq('action', 'USER_LOGIN').neq('action', 'user_login')
+      
+      // Additional filtering will be done after fetching to exclude admin login activities
 
       // Role-based filtering logic
       if (isAdmin) {
-        // Admins see all activities except user login events (too noisy)
-        query = query.neq('action', 'user_login')
-        console.log('Activity Log API: Admin user - showing all activities except user logins')
+        // Admins see all activities except login events (first logins are kept above)
+        // Admin user - showing all activities except regular logins
       } else if (isOwner) {
-        // Owners see only their own activities
-        // This includes: their own logins, company creation, invitations they sent, invitations they accepted
+        // Owners see only their own activities (excluding logins)
         query = query.eq('user_email', user_email)
-        console.log('Activity Log API: Owner user - showing only own activities')
+        // Owner user - showing only own activities except logins
       } else if (isManager) {
-        // Managers see only their own activities
+        // Managers see only their own activities (excluding logins)
         query = query.eq('user_email', user_email)
-        console.log('Activity Log API: Manager user - showing only own activities')
+        // Manager user - showing only own activities except logins
       } else if (isViewer || isTech) {
-        // Viewers and Techs only see their own activities
+        // Viewers and Techs only see their own activities (excluding logins)
         query = query.eq('user_email', user_email)
-        console.log('Activity Log API: Viewer/Tech user - showing only own activities')
+        // Viewer/Tech user - showing only own activities except logins
       } else {
-        // Default: only show own activities
+        // Default: only show own activities (excluding logins)
         query = query.eq('user_email', user_email)
-        console.log('Activity Log API: Unknown role - showing only own activities')
+        // Unknown role - showing only own activities except logins
       }
 
       const { data: activities, error } = await query
 
-      console.log('Activity Log API: Query result:', {
-        activitiesCount: activities?.length || 0,
-        activities: activities?.map(a => ({ id: a.id, action: a.action, description: a.description, user_email: a.user_email })) || [],
-        error
+      // Debug logging for admin activity issues
+      console.log('Activity Log API: Query result:', { 
+        activitiesCount: activities?.length || 0, 
+        isAdmin, 
+        user_email,
+        error: error?.message,
+        activities: activities?.map(a => ({ action: a.action, user_email: a.user_email, created_at: a.created_at })) || []
       })
+
+      // Debug: Check for USER_FIRST_LOGIN activities specifically
+      const firstLoginActivities = activities?.filter(a => a.action === 'USER_FIRST_LOGIN') || []
+      console.log('Activity Log API: USER_FIRST_LOGIN activities found:', firstLoginActivities.length)
 
       if (error) {
         console.error('Activity Log API: Error fetching activities:', error)
@@ -89,7 +100,37 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(500).json({ error: 'Failed to fetch activity logs' })
       }
 
-      res.status(200).json({ activities })
+      // Filter out admin login activities from the results
+      if (activities && activities.length > 0) {
+        // Get all admin users to filter out their login activities
+        const { data: adminUsers } = await supabase
+          .from('company_users')
+          .select('user_id')
+          .eq('role', 'admin')
+
+        const adminUserIds = adminUsers?.map(admin => admin.user_id) || []
+        
+        // Filter out activities where the user is an admin and the action is a login-related action
+        const filteredActivities = activities.filter(activity => {
+          const isAdminUser = adminUserIds.includes(activity.user_id)
+          const isLoginAction = activity.action === 'USER_FIRST_LOGIN' || 
+                               activity.action === 'ACCOUNT_SETUP_COMPLETED' ||
+                               activity.action === 'USER_LOGIN'
+          
+          // Keep the activity if it's not an admin login, or if it's not a login action at all
+          return !(isAdminUser && isLoginAction)
+        })
+        
+        console.log('Activity Log API: Filtered out admin login activities:', {
+          originalCount: activities.length,
+          filteredCount: filteredActivities.length,
+          adminUserIds: adminUserIds.length
+        })
+        
+        res.status(200).json({ activities: filteredActivities })
+      } else {
+        res.status(200).json({ activities: [] })
+      }
 
     } catch (error) {
       console.error('Activity Log API: Error:', error)

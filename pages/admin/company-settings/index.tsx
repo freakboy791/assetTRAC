@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useSessionTimeout } from '../../../lib/useSessionTimeout'
+import SessionTimeoutWarning from '../../../components/SessionTimeoutWarning'
 
 export default function CompanySettingsPage() {
   const [user, setUser] = useState<any>(null)
@@ -15,6 +17,18 @@ export default function CompanySettingsPage() {
     zip: '',
     phone: '',
     email: ''
+  })
+
+  // Session timeout management
+  const {
+    showWarning,
+    timeRemainingFormatted,
+    extendSession,
+    dismissWarning
+  } = useSessionTimeout({
+    timeoutMinutes: 30,
+    warningMinutes: 5,
+    enabled: !loading && !!user
   })
 
   useEffect(() => {
@@ -156,7 +170,7 @@ export default function CompanySettingsPage() {
                   onClick={() => window.location.href = '/admin/dashboard'}
                   className="bg-gray-600 text-white px-3 py-1.5 rounded-md text-xs hover:bg-gray-700 transition-colors"
                 >
-                  Back to Dashboard
+                  Back
                 </button>
               </div>
             </div>
@@ -184,7 +198,7 @@ export default function CompanySettingsPage() {
                 onClick={() => window.location.href = '/admin/dashboard'}
                 className="bg-gray-600 text-white px-4 py-2 rounded-md text-sm hover:bg-gray-700 transition-colors"
               >
-                Back to Dashboard
+                Back
               </button>
               <button
                 onClick={() => {
@@ -377,6 +391,14 @@ export default function CompanySettingsPage() {
           </div>
         </div>
       </main>
+      
+      {/* Session Timeout Warning */}
+      <SessionTimeoutWarning
+        show={showWarning}
+        timeRemaining={timeRemainingFormatted}
+        onExtend={extendSession}
+        onDismiss={dismissWarning}
+      />
     </div>
   )
 }

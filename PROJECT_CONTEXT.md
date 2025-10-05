@@ -5,7 +5,7 @@ assetTRAC is a comprehensive asset management system designed for Small and Medi
 
 **Purpose**: Asset management for SMBs  
 **Repository**: GitHub assetTRAC  
-**Current Status**: Development phase with core authentication and invitation system implemented
+**Current Status**: Development phase with core authentication, invitation system, and activity logging implemented
 
 ## ⚠️ CRITICAL: Project Cleanliness Policy
 **NEVER** add test files, debug files, temporary folders, or troubleshooting files to this project. 
@@ -28,13 +28,80 @@ assetTRAC is a comprehensive asset management system designed for Small and Medi
 **This policy is NON-NEGOTIABLE and must be followed strictly.**
 
 ## Technology Stack
-- **Frontend**: Next.js 13+ with TypeScript
+- **Frontend**: Next.js 12.3.0 with TypeScript
 - **Backend**: Next.js API Routes
 - **Database**: Supabase (PostgreSQL)
 - **Authentication**: Supabase Auth
-- **Email Service**: Brevo (planned)
-- **Styling**: Tailwind CSS
+- **Email Service**: Brevo (integrated)
+- **Styling**: Tailwind CSS v2.2.19 (compatible with Next.js 12.3.0)
 - **Deployment**: Vercel (configured)
+
+## Session Management System
+
+### Tab-Isolated Storage
+The system uses a custom session management system to prevent session data sharing across browser windows/tabs.
+
+**Key Files:**
+- `lib/sessionValidator.ts` - Core session validation and storage
+- `lib/useSessionTimeout.ts` - Session timeout hook
+- `components/SessionTimeoutWarning.tsx` - Timeout warning component
+
+**Features:**
+- **Tab Isolation**: Each browser tab maintains its own session
+- **Session Timeout**: 15-minute inactivity timeout
+- **Token Validation**: Custom token validation system
+- **Automatic Cleanup**: Expired sessions are automatically cleared
+
+**Implementation:**
+```typescript
+// Validate session for current tab
+const validatedSession = validateTabSession(tabId)
+
+// Store session for tab
+storeTabSession(tabId, user, userData, accessToken)
+
+// Clear session
+clearTabSession(tabId)
+```
+
+## Activity Logging System
+
+### Event Tracking
+The system logs all user activities for audit trails and dashboard display.
+
+**Key Files:**
+- `lib/activityLogger.ts` - Activity logging utility
+- `pages/api/activity/log/index.ts` - Activity log API
+- `pages/api/debug/activities/index.ts` - Debug activities API
+
+**Event Types:**
+- `USER_APPROVED` - User account approved by admin
+- `USER_LOGIN` - User login (filtered out from display)
+- `USER_FIRST_LOGIN` - User's first login
+- `INVITATION_SENT` - Invitation sent
+- `INVITATION_ACCEPTED` - Invitation accepted
+- `INVITATION_COMPLETED` - Invitation process completed
+- `COMPANY_CREATED` - Company created
+- `USER_CREATED` - User account created
+- `ACCOUNT_SETUP_COMPLETED` - Account setup completed
+
+**Event Tracking Matrix:**
+| Event | Who Gets Credit | Where Logged |
+|-------|----------------|--------------|
+| **Company Created** | Person creating company | `pages/api/company/create/index.ts` |
+| **Invitation Sent** | Person sending invite | `pages/api/send-invite-email/index.ts` |
+| **Invitation Accepted** | Person accepting invite | `pages/api/invite/accept/index.ts` |
+| **User Approved** | Admin approving user | `pages/api/admin/approve-user/index.ts` |
+| **Account Setup Completed** | Person completing setup | `pages/company/create.tsx` |
+| **First Login** | Person logging in | `pages/api/auth/signin/index.ts` |
+
+**Dashboard Filtering:**
+| Role | What They See in "Recent Activity" |
+|------|-----------------------------------|
+| **Admin** | 🔍 **All Events** (except user logins) - Can see everything |
+| **Owner** | 👤 **Only Own Events** - Just their personal actions |
+| **Manager** | 👤 **Only Own Events** - Just their personal actions |
+| **Viewer/Tech** | 👤 **Only Own Events** - Just their personal actions |
 
 ## User Roles & Permissions
 
@@ -42,22 +109,24 @@ assetTRAC is a comprehensive asset management system designed for Small and Medi
 - **Description**: Global system administrator
 - **Permissions**:
   - Full system access across all companies
-  - Manage global settings
-  - Override company-level restrictions
+  - Manage all companies (excluding own company)
+  - Send invitations for any role except admin
+  - View all activity logs
+  - Approve/reject user invitations
 - **Scope**: System-wide
+- **Dashboard**: Admin dashboard with company management, invitation management, user management
 
 ### 2. Owner (Per-Company)
 - **Description**: Company founder/owner with full company access
 - **Permissions**:
   - Create and manage company details
-  - Approve Managers
-  - Invite users with any role
+  - Send invitations for manager, tech, viewer roles
   - Full access to all company data
   - Manage company settings
   - **Asset Management**: Full create, read, update, delete access
   - **Financials Management**: Full create, read, update, delete access
 - **Redirect Flow**: After account creation → `/company/create`
-- **Approval Chain**: Approves Managers
+- **Dashboard**: Owner dashboard with company management, invitation sending
 
 ### 3. Manager (Per-Company)
 - **Description**: Company manager with configurable access levels
@@ -66,13 +135,12 @@ assetTRAC is a comprehensive asset management system designed for Small and Medi
   - **Manager - Financials**: Full financials management (create, read, update, delete) + management permissions  
   - **Manager - Both**: Full asset and financials management + management permissions
 - **Permissions**:
-  - Approve Tech and Viewer roles
+  - Send invitations for tech and viewer roles
   - **Asset Management** (based on sub-role): Full CRUD operations on assets
   - **Financials Management** (based on sub-role): Full CRUD operations on financial data
-  - Send user invitations
   - View and manage company users
 - **Redirect Flow**: After account creation → `/dashboard`
-- **Approval Chain**: Approves Tech/Viewers
+- **Dashboard**: Manager dashboard with invitation sending
 
 ### 4. Tech (Per-Company)
 - **Description**: Technical user with asset management access only
@@ -87,9 +155,9 @@ assetTRAC is a comprehensive asset management system designed for Small and Medi
 ### 5. Viewer (Per-Company)
 - **Description**: Read-only user with configurable access levels
 - **Sub-Roles**:
-  - **Viewer - Asset**: Read-only access to asset information only (no create, update, delete)
-  - **Viewer - Financials**: Read-only access to financial data only (no create, update, delete)
-  - **Viewer - Both**: Read-only access to both asset and financial data (no create, update, delete)
+  - **Viewer - Asset**: Read-only access to asset information only
+  - **Viewer - Financials**: Read-only access to financial data only
+  - **Viewer - Both**: Read-only access to both asset and financial data
 - **Permissions**:
   - **Asset Access** (based on sub-role): Read-only (view only, no modifications)
   - **Financials Access** (based on sub-role): Read-only (view only, no modifications)
@@ -102,35 +170,16 @@ assetTRAC is a comprehensive asset management system designed for Small and Medi
 ### Dashboard Access Control
 
 #### Company Management Tile Visibility
-- **Visible to**: Admin, Owner, Manager
-- **Hidden from**: Tech, Viewer
+- **Visible to**: Admin only
+- **Hidden from**: Owner, Manager, Tech, Viewer
 - **Location**: Dashboard quick actions grid
-- **Function**: Provides access to company settings and management
+- **Function**: Provides access to manage all companies (excluding admin's own company)
 
-#### Company Information Recap
-- **Visible to**: Tech, Viewer
-- **Hidden from**: Admin, Owner, Manager (they have full management access)
-- **Location**: Top of dashboard, above quick actions
-- **Content**: Read-only display of company name, email, phone, and address
-
-### Company Management Page Access Control
-
-#### Edit Permissions
-- **Can Edit**: Admin, Owner, Manager
-- **Read-Only**: Tech, Viewer
-- **Implementation**: Edit button appears only for users with edit permissions
-
-#### Form Field States
-- **Edit Mode**: Fields are enabled and editable
-- **View Mode**: Fields are disabled and read-only
-- **Toggle**: Users with edit permissions can switch between modes
-
-#### Action Buttons
-- **Edit Button**: Only visible to Admin, Owner, Manager
-- **Save Button**: Only visible when in edit mode and user has edit permissions
-- **Back to Dashboard**: Always visible
-
-### Invitation System Access Control
+#### Company Information in Profile
+- **Visible to**: All users
+- **Location**: Profile page (accessible via header)
+- **Content**: Company information with edit permissions based on role
+- **Edit Permissions**: Admin, Owner (for their own company)
 
 #### Send Invitation Tile Visibility
 - **Visible to**: Admin, Owner, Manager
@@ -138,108 +187,49 @@ assetTRAC is a comprehensive asset management system designed for Small and Medi
 - **Location**: Dashboard quick actions grid
 - **Function**: Provides access to send user invitations
 
-#### Invitation Page Access
-- **Can Access**: Admin, Owner, Manager
-- **Cannot Access**: Tech, Viewer (redirected to dashboard with error message)
-- **URL**: `/admin/invite`
+### Invitation System Access Control
 
-#### Role-Based Invitation Permissions
+#### Role Hierarchy & Invitation Permissions
 
-| Inviter Role | Can Invite | Cannot Invite |
-|--------------|------------|---------------|
-| **Admin** | Owner, Manager-*, Tech, Viewer-* | Admin |
-| **Owner** | Owner, Manager-*, Tech, Viewer-* | Admin |
-| **Manager-*** | Tech, Viewer-* | Admin, Owner, Manager-* |
-| **Tech** | None | All roles (no access) |
-| **Viewer-*** | None | All roles (no access) |
+**Role Hierarchy (Highest to Lowest):**
+1. **Admin** - System administrator
+2. **Owner** - Company owner  
+3. **Manager** - Department/team manager
+4. **Tech** - Technical user
+5. **Viewer** - Read-only user
 
-#### Role Dropdown Options
-- **Admin/Owner**: All roles except Admin (including all sub-roles)
-- **Manager-***: Only Tech and Viewer sub-roles
-- **Tech/Viewer-***: No access to invitation system
+**Invitation Permissions Matrix:**
 
-#### Sub-Role Definitions
-- **Manager-***: Any manager sub-role (manager-asset, manager-financials, manager-both)
-- **Viewer-***: Any viewer sub-role (viewer-asset, viewer-financials, viewer-both)
+| Inviter Role | Can Invite | Cannot Invite | Security Notes |
+|--------------|------------|---------------|----------------|
+| **Admin** | Owner, Manager-*, Tech, Viewer-* | Admin | Prevents privilege escalation |
+| **Owner** | Manager-*, Tech, Viewer-* | Admin, Owner | Cannot create other owners |
+| **Manager-*** | Tech, Viewer-* | Admin, Owner, Manager-* | Cannot create peers or superiors |
+| **Tech** | None | All roles | No invitation access |
+| **Viewer-*** | None | All roles | No invitation access |
+
+**Security Features:**
+- **Frontend Validation**: Role dropdown only shows allowed roles
+- **Backend Validation**: API validates permissions server-side
+- **Authorization Required**: All invitation requests must include valid auth token
+- **Role Hierarchy Enforcement**: Prevents privilege escalation
 
 ### Permission Matrix
 
 | Feature | Admin | Owner | Manager-* | Tech | Viewer-* |
 |---------|-------|-------|-----------|------|----------|
-| **Dashboard Company Management Tile** | ✅ | ✅ | ✅ | ❌ | ❌ |
-| **Dashboard Company Recap** | ❌ | ❌ | ❌ | ✅ | ✅ |
-| **Company Management Page Access** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **Edit Company Information** | ✅ | ✅ | ✅ | ❌ | ❌ |
+| **Company Management Tile** | ✅ | ❌ | ❌ | ❌ | ❌ |
+| **Company Profile Access** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Edit Company Information** | ✅ | ✅ | ❌ | ❌ | ❌ |
 | **View Company Information** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **Depreciation Rate Management** | ✅ | ✅ | ❌ | ❌ | ❌ |
 | **Send Invitation Tile** | ✅ | ✅ | ✅ | ❌ | ❌ |
 | **Send Invitation Page Access** | ✅ | ✅ | ✅ | ❌ | ❌ |
-| **Invite Owner Role** | ✅ | ✅ | ❌ | ❌ | ❌ |
+| **Invite Owner Role** | ✅ | ❌ | ❌ | ❌ | ❌ |
 | **Invite Manager-* Role** | ✅ | ✅ | ❌ | ❌ | ❌ |
 | **Invite Tech Role** | ✅ | ✅ | ✅ | ❌ | ❌ |
 | **Invite Viewer-* Role** | ✅ | ✅ | ✅ | ❌ | ❌ |
 | **Asset Management Access** | ✅ | ✅ | Based on sub-role | ✅ | Based on sub-role |
 | **Financials Access** | ✅ | ✅ | Based on sub-role | ❌ | Based on sub-role |
-| **Asset View Access** | ✅ | ✅ | Based on sub-role | ✅ | Based on sub-role |
-| **Financials View Access** | ✅ | ✅ | Based on sub-role | ❌ | Based on sub-role |
-
-### Sub-Role Access Matrix
-
-| Role | Asset Access | Financials Access | Management Permissions |
-|------|--------------|-------------------|----------------------|
-| **Admin** | ✅ Full CRUD | ✅ Full CRUD | ✅ Full |
-| **Owner** | ✅ Full CRUD | ✅ Full CRUD | ✅ Full |
-| **Manager-Asset** | ✅ Full CRUD | ❌ None | ✅ Full |
-| **Manager-Financials** | ❌ None | ✅ Full CRUD | ✅ Full |
-| **Manager-Both** | ✅ Full CRUD | ✅ Full CRUD | ✅ Full |
-| **Tech** | ✅ Full CRUD | ❌ None | ❌ None |
-| **Viewer-Asset** | ✅ Read-only | ❌ None | ❌ None |
-| **Viewer-Financials** | ❌ None | ✅ Read-only | ❌ None |
-| **Viewer-Both** | ✅ Read-only | ✅ Read-only | ❌ None |
-
-### Permission Clarifications
-
-#### Management vs View Permissions
-- **Management Access**: Can create, read, update, and delete data
-- **View Access**: Can only read/view data (no create, update, delete)
-
-#### Asset Access
-- **Full CRUD**: Create, read, update, delete assets
-- **Read-only**: View asset information only
-
-#### Financials Access  
-- **Full CRUD**: Create, read, update, delete financial data
-- **Read-only**: View financial reports and data only
-
-### Implementation Details
-
-#### Helper Functions
-```typescript
-// Check if user can manage company (admin, owner, manager)
-const canManageCompany = () => {
-  return userRoles.includes('admin') || userRoles.includes('owner') || userRoles.includes('manager')
-}
-
-// Check if user should see company recap (tech, viewer)
-const shouldShowCompanyRecap = () => {
-  return userRoles.includes('viewer') || userRoles.includes('tech')
-}
-
-// Check if user can edit company
-const canEditCompany = () => {
-  return isAdmin || isOwner || isManager
-}
-```
-
-#### Role Storage
-- **Session Storage**: `userRoles` array, `isAdmin`, `isOwner` flags
-- **User Metadata**: Fallback role information in Supabase user metadata
-- **Database**: Role information stored in `company_users` table
-
-#### UI State Management
-- **Edit Mode Toggle**: `isEditing` state controls form field states
-- **Role-Based Rendering**: Conditional rendering based on user roles
-- **Dynamic Styling**: Form fields styled differently based on edit permissions
 
 ## Database Schema (Current Implementation)
 
@@ -284,24 +274,7 @@ const canEditCompany = () => {
 - created_at: timestamp with time zone (default: now())
 ```
 
-#### 4. `assets`
-```sql
-- id: uuid (Primary Key, default: gen_random_uuid())
-- company_id: uuid (nullable)
-- assigned_to: uuid (nullable, references profiles.id)
-- name: text (NOT NULL)
-- type: text (nullable)
-- serial_number: text (nullable)
-- purchase_date: date (nullable)
-- cost: numeric (nullable)
-- depreciated_value: numeric (nullable)
-- status: text (nullable, default: 'active')
-- note: text (nullable)
-- created_at: timestamp with time zone (default: now())
-- updated_at: timestamp with time zone (default: now())
-```
-
-#### 5. `invites`
+#### 4. `invites`
 ```sql
 - id: uuid (Primary Key, default: gen_random_uuid())
 - company_id: uuid (references companies.id)
@@ -320,65 +293,22 @@ const canEditCompany = () => {
 - admin_approved_at: timestamp with time zone (nullable)
 - admin_approved_by: uuid (nullable)
 - completed_at: timestamp with time zone (nullable)
+- user_id: uuid (nullable)
 ```
 
-#### 6. `activity_logs` ✅ **ACTIVE**
+#### 5. `activity_logs` ✅ **ACTIVE**
 ```sql
 - id: uuid (Primary Key, default: gen_random_uuid())
 - user_id: uuid (nullable, references auth.users.id)
 - user_email: text (NOT NULL)
-- company_id: uuid (nullable, references companies.id) -- For company-specific activities
-- action: text (NOT NULL) -- 'user_approved', 'user_login', 'invitation_sent', 'invitation_accepted', 'invitation_completed', etc.
-- description: text (NOT NULL) -- Human-readable description
-- metadata: jsonb (nullable) -- Additional data about the event
+- company_id: uuid (nullable, references companies.id)
+- action: text (NOT NULL)
+- description: text (NOT NULL)
+- metadata: jsonb (nullable)
 - created_at: timestamp with time zone (default: now())
 ```
 
-**Usage**: This table stores system activity logs for audit trails and dashboard display. Activities are logged via `lib/activityLogger.ts` and displayed in the Recent Activity section of dashboards. Sample data includes invitation events, user approvals, and completion activities.
-
-**Event Tracking & Filtering System**:
-
-**Event Tracking (Who Initiates Each Event)**:
-| Event | Who Gets Credit | Where Logged |
-|-------|----------------|--------------|
-| **Company Created** | Person creating company | `pages/api/company/create/index.ts` |
-| **Invitation Sent** | Person sending invite | `pages/api/send-invite-email/index.ts` |
-| **Invitation Accepted** | Person accepting invite | `pages/api/invite/accept/index.ts` |
-| **User Approved** | Admin approving user | `pages/api/admin/approve-user/index.ts` |
-| **Invitation Completed** | Person completing process | `pages/index.tsx` |
-| **User Login** | Person logging in | `pages/index.tsx` |
-
-**Dashboard Filtering (Who Sees What)**:
-| Role | What They See in "Recent Activity" |
-|------|-----------------------------------|
-| **Admin** | 🔍 **All Events** (except user logins) - Can see everything |
-| **Owner** | 👤 **Only Own Events** - Just their personal actions |
-| **Manager** | 👤 **Only Own Events** - Just their personal actions |
-| **Viewer/Tech** | 👤 **Only Own Events** - Just their personal actions |
-
-**How It Works**:
-1. **Event Logging**: Every action logs the `user_email` of who performed it
-2. **Database Storage**: Events stored in `activity_logs` table with proper initiator tracking
-3. **Role-Based Filtering**: Each dashboard filters events based on user's role and email
-4. **Personal Privacy**: Non-admin users only see their own activities
-
-**Example Scenarios**:
-- **Admin Dashboard**: Sees all events (invitation sent, user approved, company created) except user logins
-- **Owner Dashboard**: Sees only their own events (company created, invitations they sent) but not admin approvals
-- **Manager/Viewer/Tech**: See only their personal activities
-
-#### 7. `admin_notifications`
-```sql
-- id: integer (Primary Key, auto-increment)
-- type: text (NOT NULL)
-- user_id: uuid (nullable)
-- company_id: uuid (references companies.id)
-- message: text (NOT NULL)
-- is_read: boolean (default: FALSE)
-- created_at: timestamp with time zone (default: now())
-```
-
-#### 7. `user_roles`
+#### 6. `user_roles`
 ```sql
 - id: uuid (Primary Key, default: gen_random_uuid())
 - user_id: uuid (nullable)
@@ -386,48 +316,40 @@ const canEditCompany = () => {
 - created_at: timestamp with time zone (default: now())
 ```
 
-### Key Observations
-
-#### Current vs Planned Schema Differences:
-1. **`profiles` table**: Missing `company_name` and `role` fields (stored in `company_users` instead)
-2. **`invites` table**: Uses `uuid` for `id` instead of `serial`, has additional fields like `accepted`
-3. **`assets` table**: Uses `type` instead of `category`, `cost` instead of `purchase_price`
-4. **`companies` table**: Missing `description` and `website` fields, has address fields split into `street`, `city`, `state`, `zip`
-5. **Additional tables**: `admin_notifications`, `user_roles`, and `activity_logs` exist in current implementation
-6. **`activity_logs` table**: ✅ **ACTIVE** - Stores system activity logs for audit trails and dashboard display
-
-#### Foreign Key Relationships:
-- `company_users.company_id` → `companies.id`
-- `invites.company_id` → `companies.id`
-- `admin_notifications.company_id` → `companies.id`
-- `assets.assigned_to` → `profiles.id`
-
-#### Default Values:
-- UUIDs: `gen_random_uuid()` for most primary keys
-- Timestamps: `now()` for created_at fields
-- Booleans: `FALSE` for approval/verification flags
-- Status fields: `'active'` for assets, `'pending'` for invites
-
 ## API Endpoints
 
 ### Authentication
 - `POST /api/auth/signin` - User login with custom error handling
 - `POST /api/auth/signout` - User logout
+- `GET /api/auth/getUser` - Get user data with role information
 
 ### User Management
+- `GET /api/users/completed` - Get completed users (admin only)
 - `POST /api/check-user-exists` - Check if user exists in system
 - `POST /api/check-invitation` - Check for pending invitations
-- `POST /api/create-invited-user` - Create user from invitation
 
 ### Admin Functions
 - `GET /api/admin/invitations` - List all invitations (admin only)
 - `POST /api/admin/approve-user` - Approve user invitation
 - `POST /api/admin/reject-invitation` - Reject user invitation
+- `GET /api/admin/companies` - List all companies (admin only)
 
 ### Invitation System
 - `POST /api/send-invite-email` - Send invitation email
 - `GET /api/invite/validate?token={token}` - Validate invitation token
 - `POST /api/invite/accept` - Accept invitation and create account
+- `POST /api/invite/validate-setup` - Validate invitation for setup
+- `POST /api/resend-invite-email` - Resend invitation email
+
+### Company Management
+- `GET /api/company/get` - Get company data
+- `POST /api/company/save` - Save company data
+- `POST /api/company/create` - Create new company
+
+### Activity Logging
+- `GET /api/activity/log` - Get activity logs (role-based filtering)
+- `POST /api/activity/log` - Log activity
+- `GET /api/debug/activities` - Debug all activities (admin only)
 
 ## Page Structure
 
@@ -436,48 +358,54 @@ const canEditCompany = () => {
 - `/auth` - Authentication page (alternative login)
 
 ### User Pages
-- `/dashboard` - Main user dashboard (consolidated admin/user dashboard)
+- `/dashboard` - Main user dashboard (role-based)
+- `/profile` - User profile with company information
 - `/company/create` - Company creation page (owner role)
+- `/company/manage` - Company management page
 
 ### Admin Pages
 - `/admin/invite` - Send user invitations
-- `/admin/company-settings` - Manage company settings
+- `/admin/companies` - Manage all companies
+- `/admin/users` - Manage all users
 
 ### Invitation Pages
-- `/invite/accept/[token]` - Accept invitation and set password
+- `/join/[token]` - Accept invitation and set password
 
 ## Key Features
 
 ### 1. Authentication & Authorization
 - Supabase Auth integration
+- Tab-isolated session management
 - Role-based access control (RBAC)
 - Multi-company support with many-to-many relationships
-- Row Level Security (RLS) scoped by company + role
+- Session timeout (15 minutes inactivity)
 
 ### 2. Invitation System
 - Token-based invitation links
 - Role selection during invitation
-- Approval chain: Owners → Managers → Tech/Viewers
-- Email integration with Brevo (planned)
+- Approval chain: Admin → Owner → Manager → Tech/Viewer
+- Email integration with Brevo
 - Automatic account creation
+- Company setup flow for owners
 
 ### 3. Company Management
 - Company onboarding on first login
 - Company creation for owners
 - Company settings management
 - User-company associations
+- Admin can manage all companies
 
-### 4. Asset Management (Planned)
-- Asset CRUD operations with financials
-- Asset assignments to users
-- Depreciation tracking
-- Category and status management
-- Location tracking
+### 4. Activity Logging
+- Comprehensive event tracking
+- Role-based activity filtering
+- Audit trail for all actions
+- Debug tools for troubleshooting
 
-### 5. Consolidated Dashboard
-- Single dashboard for all user types
-- Role-based UI elements
-- Admin features integrated into main dashboard
+### 5. Session Management
+- Tab-isolated sessions
+- Automatic session timeout
+- Token validation system
+- Session cleanup
 
 ## Environment Variables Required
 
@@ -486,7 +414,8 @@ NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 BREVO_API_KEY=your_brevo_api_key
-NEXT_PUBLIC_SITE_URL=http://localhost:3000 (for development)
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
+ADMIN_EMAIL=your_admin_email
 ```
 
 ## Development Setup
@@ -498,35 +427,80 @@ NEXT_PUBLIC_SITE_URL=http://localhost:3000 (for development)
 
 ## Recent Changes & Fixes
 
-### Dashboard Consolidation
-- Merged `/admin/dashboard` into `/dashboard`
-- Added admin invitation management to main dashboard
-- Removed redundant admin dashboard page
+### Session Management
+- ✅ Implemented tab-isolated session storage
+- ✅ Added session timeout functionality
+- ✅ Fixed session data sharing across browser windows
+- ✅ Added session validation system
 
-### Invitation System Overhaul
-- Fixed database column name mismatches
-- Added role selection in invitation form
-- Implemented proper token-based invitation flow
-- Added custom email function (logging only)
+### Activity Logging
+- ✅ Implemented comprehensive activity logging
+- ✅ Added role-based activity filtering
+- ✅ Created debug tools for troubleshooting
+- ✅ Fixed missing activity events
 
-### Authentication Improvements
-- Fixed admin login issues
-- Added specific error messages for non-existent accounts
-- Improved session handling
+### UI/UX Improvements
+- ✅ Fixed button styling issues with Tailwind CSS
+- ✅ Added Profile button to header
+- ✅ Moved refresh button to Recent Activity section
+- ✅ Fixed role display in header
+- ✅ Added data trimming to prevent trailing spaces
 
-### UI/UX Enhancements
-- Consistent breadcrumb navigation
-- Improved error messaging
-- Role-based form fields and redirects
+### Invitation System
+- ✅ Fixed invitation completion timing
+- ✅ Added account setup completion logging
+- ✅ Fixed first login detection
+- ✅ Improved invitation flow for owners
+
+### Data Validation
+- ✅ Added comprehensive input trimming
+- ✅ Fixed address formatting issues
+- ✅ Improved form validation
+
+## Troubleshooting
+
+### Common Issues
+
+**1. Session Data Sharing Across Tabs**
+- **Cause**: Using localStorage instead of sessionStorage
+- **Solution**: Use tab-isolated storage system
+
+**2. Missing Activity Events**
+- **Cause**: Activity logging calls failing silently
+- **Solution**: Check console logs for activity logging errors
+
+**3. Button Styling Issues**
+- **Cause**: Tailwind CSS compatibility with Next.js 12.3.0
+- **Solution**: Use Tailwind CSS v2.2.19
+
+**4. Role Not Displaying in Header**
+- **Cause**: getUser API not returning role information
+- **Solution**: Check user metadata structure
+
+### Debug Tools
+
+**Debug Activities API:**
+```
+GET /api/debug/activities
+```
+Returns all activities in database for troubleshooting.
+
+**Session Validation:**
+Check browser console for session validation errors.
+
+**Activity Logging:**
+Check console logs for activity logging success/failure messages.
 
 ## Development Plan
 
-### Phase 1: Foundation (Current)
+### Phase 1: Foundation (Current) ✅
 1. ✅ Inventory repo + scaffold files
 2. ✅ Build auth flow (signup/login/reset)
 3. ✅ Implement Owner company setup
 4. ✅ Add role-based navigation
 5. ✅ Basic invitation system
+6. ✅ Activity logging system
+7. ✅ Session management system
 
 ### Phase 2: Asset Management (Next)
 1. **Asset CRUD**: Create, read, update, delete assets
@@ -552,44 +526,35 @@ NEXT_PUBLIC_SITE_URL=http://localhost:3000 (for development)
 ## File Structure
 
 ```
-/app (planned structure)
-├── auth/
-├── dashboard/
-├── company-setup/
-└── test/
-
-/pages (current structure)
+/pages
 ├── api/
 │   ├── auth/
 │   ├── admin/
-│   └── invite/
+│   ├── invite/
+│   ├── company/
+│   ├── users/
+│   └── activity/
 ├── admin/
 │   ├── invite/
-│   └── company-settings/
+│   ├── companies/
+│   └── users/
 ├── auth/
 ├── company/
 ├── dashboard/
-├── invite/accept/[token]/
+├── profile/
+├── join/[token]/
 └── index.tsx
 
-/components (planned)
-├── header/
-├── footer/
-└── nav/
-
 /lib
-├── supabaseClient.ts
-└── brevo.ts (planned)
+├── sessionValidator.ts
+├── activityLogger.ts
+└── useSessionTimeout.ts
 
-/styles
-└── globals.css
+/components
+└── SessionTimeoutWarning.tsx
 
-supabase/
-├── functions/
-│   └── send-invite-email/
-└── config.toml
-
-types.ts
+/types
+└── index.ts
 ```
 
 ## TypeScript Interfaces
@@ -599,8 +564,9 @@ types.ts
 interface Profile {
   id: string
   email: string
-  first_name: string
-  last_name: string
+  first_name: string | null
+  last_name: string | null
+  is_approved: boolean
   created_at: string
   updated_at: string
 }
@@ -608,62 +574,37 @@ interface Profile {
 interface Company {
   id: string
   name: string
-  description: string
-  address: string
-  phone: string
-  email: string
-  website: string
+  street: string | null
+  city: string | null
+  state: string | null
+  zip: string | null
+  phone: string | null
+  email: string | null
+  depreciation_rate: number | null
   created_at: string
-  updated_at: string
-  owner_id: string
-}
-
-interface CompanyUser {
-  id: string
-  user_id: string
-  company_id: string
-  role_type: 'owner' | 'manager' | 'tech' | 'viewer'
-  created_at: string
-  updated_at: string
-  is_active: boolean
-}
-
-interface Asset {
-  id: string
-  company_id: string
-  name: string
-  description: string
-  category: string
-  serial_number: string
-  purchase_date: string
-  purchase_price: number
-  current_value: number
-  depreciation_rate: number
-  status: 'active' | 'inactive' | 'retired' | 'maintenance'
-  assigned_to: string | null
-  location: string
-  created_at: string
-  updated_at: string
 }
 
 interface Invite {
-  id: number
+  id: string
   invited_email: string
   company_id: string
   company_name: string
-  message: string | null
-  token: string
-  expires_at: string
-  used: boolean
-  created_by: string | null
+  role: string
+  status: 'pending' | 'email_confirmed' | 'admin_approved' | 'completed'
   created_at: string
-  role: 'owner' | 'manager' | 'tech' | 'viewer'
-  status: 'pending' | 'email_confirmed' | 'admin_approved' | 'completed' | 'expired'
-  email_confirmed_at: string | null
-  admin_approved_at: string | null
-  admin_approved_by: string | null
   completed_at: string | null
   user_id: string | null
+}
+
+interface ActivityLog {
+  id: string
+  user_id: string | null
+  user_email: string
+  company_id: string | null
+  action: string
+  description: string
+  metadata: any
+  created_at: string
 }
 ```
 
@@ -674,3 +615,6 @@ interface Invite {
 - Role-based redirects ensure proper user flow
 - Database schema supports multi-tenant architecture
 - Error handling is comprehensive with user-friendly messages
+- Session management prevents data sharing across browser tabs
+- Activity logging provides complete audit trail
+- Debug tools available for troubleshooting

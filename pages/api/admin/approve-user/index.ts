@@ -10,22 +10,45 @@ const supabase = createClient(
 )
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  console.log('Approve User API: Request received')
+  
   if (req.method !== 'POST') {
+    console.log('Approve User API: Method not allowed:', req.method)
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
   try {
     // Get the authorization token from the request headers
     const authHeader = req.headers.authorization
+    console.log('Approve User API: Auth header present:', !!authHeader)
+    
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log('Approve User API: No valid authorization token provided')
       return res.status(401).json({ error: 'No authorization token provided' })
     }
 
     const token = authHeader.split(' ')[1]
+    console.log('Approve User API: Token length:', token.length)
+    
+    // Create a client for token validation using anon key
+    const { createClient } = await import('@supabase/supabase-js')
+    const anonClient = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        auth: {
+          autoRefreshToken: true,
+          persistSession: false
+        }
+      }
+    )
     
     // Get the user from the token
-    const { data: { user }, error: userError } = await supabase.auth.getUser(token)
+    const { data: { user }, error: userError } = await anonClient.auth.getUser(token)
+    console.log('Approve User API: User lookup result:', { user: !!user, error: userError?.message })
+    
     if (userError || !user) {
+      console.log('Approve User API: Invalid token or user error')
       return res.status(401).json({ error: 'Invalid token' })
     }
 
@@ -84,7 +107,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Update invitation status to admin_approved
-    const { error: updateError } = await supabase
+    const { data: updatedInvite, error: updateError } = await supabase
       .from('invites')
       .update({
         status: 'admin_approved',
@@ -92,12 +115,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         admin_approved_by: user.id
       })
       .eq('id', invitationId)
+      .select()
 
     if (updateError) {
       console.error('Approve User API: Error updating invitation:', updateError)
       return res.status(500).json({ error: 'Failed to approve invitation' })
     } else {
       console.log('Approve User API: Invitation status updated to admin_approved')
+      console.log('Approve User API: Updated invitation data:', updatedInvite)
     }
 
     // Update user profile to mark as approved
@@ -138,9 +163,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     } else {
       console.log('Approve User API: Profile updated successfully:', updateData)
+      console.log('Approve User API: Profile is_approved status:', updateData?.[0]?.is_approved)
     }
 
     console.log('User approved successfully:', invitation.invited_email)
+
+    // Don't mark as completed yet - let first login do that
+    console.log('Invitation approved, waiting for user to login to complete setup')
 
     // Log the approval activity
     try {

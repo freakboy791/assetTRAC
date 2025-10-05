@@ -1,40 +1,9 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-
-// Window-specific storage utility using localStorage with unique window ID
-const getWindowId = () => {
-  let windowId = localStorage.getItem('windowId')
-  if (!windowId) {
-    // Create a unique window identifier using performance.now() for better uniqueness
-    windowId = `win_${Date.now()}_${performance.now()}_${Math.random().toString(36).substr(2, 9)}`
-    localStorage.setItem('windowId', windowId)
-  }
-  return windowId
-}
-
-const setTabStorage = (key: string, value: string) => {
-  const windowId = getWindowId()
-  localStorage.setItem(`${windowId}_${key}`, value)
-}
-
-const getTabStorage = (key: string) => {
-  const windowId = getWindowId()
-  return localStorage.getItem(`${windowId}_${key}`)
-}
-
-const clearTabStorage = () => {
-  const windowId = getWindowId()
-  const keys = Object.keys(localStorage)
-  keys.forEach(key => {
-    if (key.startsWith(`${windowId}_`)) {
-      localStorage.removeItem(key)
-    }
-  })
-  localStorage.removeItem('windowId')
-}
+import { validateTabSession, storeTabSession, clearTabSession, getCurrentTabId as getTabId, validateSessionWithServer } from '../lib/sessionValidator'
 
 export default function HomePage() {
-  console.log('Home page: Component rendering')
+  // Component rendering - debug log removed
   
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -47,52 +16,44 @@ export default function HomePage() {
   const [showEmailAdminButton, setShowEmailAdminButton] = useState(false)
   const [notifyingAdmin, setNotifyingAdmin] = useState(false)
 
-  // Check if user is already logged in
+  // Check if user is already logged in with tab isolation
   useEffect(() => {
     const checkUser = async () => {
-      console.log('Home page: Checking if user is already logged in...')
+      // Checking if user is already logged in
+      
       try {
         // Import the shared Supabase client
         const { supabase: getSupabaseClient } = await import('../lib/supabaseClient')
         const supabase = getSupabaseClient()
         
-        // Clear any existing session to force fresh authentication
-        await supabase.auth.signOut()
+        // Check if this tab already has a validated session
+        const tabId = getTabId()
+        // Checking for validated session
+        const validatedSession = validateTabSession(tabId)
         
-        // Check if there's a valid session after clearing
-        const { data: { session }, error } = await supabase.auth.getSession()
-        console.log('Home page: Session check result:', error ? 'Error' : 'Success')
-        console.log('Home page: Session data:', session ? 'Session found' : 'No session')
-        
-        if (session?.user) {
-          console.log('Home page: User found, checking role for proper redirect')
-          
-          // Check user role and redirect accordingly
-          try {
-            const response = await fetch('/api/auth/getUser', {
-              method: 'GET',
-              headers: {
-                'Authorization': `Bearer ${session.access_token}`
-              }
-            })
-            
-            const userData = await response.json()
-            console.log('Home page: User data:', userData)
-            
-            if (userData.isAdmin) {
-              console.log('Home page: User is admin, redirecting to admin dashboard')
-              window.location.href = '/admin/dashboard'
-            } else {
-              console.log('Home page: User is not admin, redirecting to regular dashboard')
-              window.location.href = '/dashboard'
-            }
-          } catch (error) {
-            console.log('Home page: Error checking user role, defaulting to regular dashboard')
+        if (validatedSession) {
+          console.log('Home page: Found validated tab session, redirecting...', {
+            userEmail: validatedSession.user.email,
+            isAdmin: validatedSession.userData.isAdmin,
+            isOwner: validatedSession.userData.isOwner,
+            hasCompany: validatedSession.userData.hasCompany
+          })
+          if (validatedSession.userData.isAdmin) {
+            console.log('Home page: Existing admin session, redirecting to admin dashboard')
+            window.location.href = '/admin/dashboard'
+          } else {
+            console.log('Home page: Existing user session, redirecting to regular dashboard')
             window.location.href = '/dashboard'
           }
-        } else {
-          console.log('Home page: No user found, staying on home page')
+          return
         }
+        
+        // No validated session found, clear any existing data and stay on login page
+        console.log('Home page: No validated session found, staying on login page')
+        clearTabSession(tabId)
+        
+        // Force clear any Supabase session to prevent cross-tab contamination
+        await supabase.auth.signOut()
       } catch (error) {
         console.log('Home page: Error checking user:', error)
       }
@@ -159,7 +120,10 @@ export default function HomePage() {
     console.log('Home page: handleLogIn called')
     console.log('Login attempt started', { email, password: '***' })
     
-    if (!email || !password) {
+    const trimmedEmail = email.trim()
+    const trimmedPassword = password.trim()
+    
+    if (!trimmedEmail || !trimmedPassword) {
       console.log('Home page: Missing email or password')
       setMessage('Please fill in all fields')
       return
@@ -262,6 +226,7 @@ export default function HomePage() {
 
             if (error) {
               console.log('Login error:', error)
+              console.log('Login error message:', error.message)
               
               // Use the specific error message from our API
               if (error.message === 'No account exists for this email address') {
@@ -273,6 +238,40 @@ export default function HomePage() {
               } else if (error.message.includes('Email not confirmed')) {
                 setAccountExists(true)
                 setMessage('Please check your email and click the confirmation link before logging in. If you need a new confirmation email, try registering again.')
+              } else if (error.message.includes('waiting for admin approval')) {
+                console.log('Login: Detected waiting for admin approval message')
+                setAccountExists(true)
+                setMessage(error.message)
+                // Try to get invitation data to show the button
+                try {
+                  console.log('Login: Fetching invitation data for email:', email)
+                  const inviteResponse = await fetch('/api/check-invitation', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ email }),
+                  })
+                  
+                  console.log('Login: Invitation response status:', inviteResponse.status)
+                  if (inviteResponse.ok) {
+                    const inviteData = await inviteResponse.json()
+                    console.log('Login: Invitation data received:', inviteData)
+                    if (inviteData.invitation) {
+                      console.log('Login: Setting invitation data and showing button')
+                      console.log('Login: Invitation data:', inviteData.invitation)
+                      setCurrentInvite(inviteData.invitation)
+                      setShowEmailAdminButton(true)
+                      console.log('Login: Button state set to true')
+                    } else {
+                      console.log('Login: No invitation data found')
+                    }
+                  } else {
+                    console.log('Login: Invitation fetch failed:', inviteResponse.status)
+                  }
+                } catch (inviteError) {
+                  console.error('Error fetching invitation data:', inviteError)
+                }
               } else {
                 setAccountExists(true)
                 setMessage(error.message || 'Invalid email or password. Please check your credentials and try again.')
@@ -291,19 +290,18 @@ export default function HomePage() {
               if (session) {
                 console.log('Session set successfully, redirecting to dashboard')
                 
-                // Store role information in tab-specific session storage for dashboard use
-                if (result.userRoles) {
-                  setTabStorage('userRoles', JSON.stringify(result.userRoles))
+                // Store session in tab-specific validation system
+                const tabId = getTabId()
+                const userData = {
+                  isAdmin: result.isAdmin || false,
+                  isOwner: result.isOwner || false,
+                  hasCompany: result.hasCompany || false,
+                  roles: result.userRoles || []
                 }
-                if (result.isAdmin !== undefined) {
-                  setTabStorage('isAdmin', result.isAdmin.toString())
-                }
-                if (result.isOwner !== undefined) {
-                  setTabStorage('isOwner', result.isOwner.toString())
-                }
-                if (result.hasCompany !== undefined) {
-                  setTabStorage('hasCompany', result.hasCompany.toString())
-                }
+                
+                console.log('Home page: Storing validated session for tab:', tabId, 'User:', session.user.email)
+                storeTabSession(tabId, session.user, userData, session.access_token)
+                console.log('Home page: Session stored successfully for tab:', tabId)
                 
                 // Redirect based on user role
                 if (result.isAdmin) {
@@ -340,6 +338,9 @@ export default function HomePage() {
           return
         } else if (inviteData.invitation.status === 'email_confirmed' && !inviteData.invitation.admin_approved_at) {
           setMessage('Your account is waiting for admin approval. Please contact your administrator to approve your account.')
+          setCurrentInvite(inviteData.invitation)
+          setShowEmailAdminButton(true)
+          setLoading(false)
           return
         } else if (inviteData.invitation.status === 'admin_approved') {
           // User has been approved by admin, now try to authenticate with Supabase
@@ -350,8 +351,8 @@ export default function HomePage() {
           const supabase = getSupabaseClient()
           
           const { data, error } = await supabase.auth.signInWithPassword({
-            email,
-            password,
+            email: trimmedEmail,
+            password: trimmedPassword,
           })
 
           console.log('Sign in response:', error ? 'Error' : 'Success')
@@ -374,50 +375,45 @@ export default function HomePage() {
             // Successful login - set session storage and redirect to dashboard
             console.log('Login successful! Setting session storage and redirecting to dashboard...')
             
-            // Update invitation status to completed and record login timestamp
+            // Note: Invitation completion is now handled by the signin API
+            // No need to update status here as it's done automatically during signin
+            
+            // Store session in tab-specific validation system
+            const tabId = getTabId()
+            
+            // Get actual user data from the API instead of hardcoding
             try {
-              const updateResponse = await fetch('/api/invite/update-status', {
-                method: 'POST',
+              const userResponse = await fetch('/api/auth/getUser', {
+                method: 'GET',
                 headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ 
-                  email,
-                  status: 'completed',
-                  completed_at: new Date().toISOString()
-                })
+                  'Authorization': `Bearer ${data.session.access_token}`
+                }
               })
               
-              if (updateResponse.ok) {
-                console.log('Invitation status updated to completed')
-                
-                // Log the completion activity
-                try {
-                  const { logActivity, ActivityTypes } = await import('../lib/activityLogger')
-                  await logActivity({
-                    user_email: email,
-                    action: ActivityTypes.INVITATION_COMPLETED,
-                    description: `User completed invitation process and logged in for the first time`,
-                    metadata: {
-                      user_email: email,
-                      completed_at: new Date().toISOString()
-                    }
-                  })
-                } catch (logError) {
-                  console.error('Error logging completion activity:', logError)
-                }
+              if (userResponse.ok) {
+                const userData = await userResponse.json()
+                storeTabSession(tabId, data.user, userData, data.session.access_token)
               } else {
-                console.error('Failed to update invitation status')
+                // Fallback to hardcoded values if API fails
+                const userData = {
+                  isAdmin: false,
+                  isOwner: true,
+                  hasCompany: true,
+                  roles: ['owner']
+                }
+                storeTabSession(tabId, data.user, userData, data.session.access_token)
               }
-            } catch (updateError) {
-              console.error('Error updating invitation status:', updateError)
+            } catch (error) {
+              console.error('Error getting user data, using fallback:', error)
+              // Fallback to hardcoded values if API fails
+              const userData = {
+                isAdmin: false,
+                isOwner: true,
+                hasCompany: true,
+                roles: ['owner']
+              }
+              storeTabSession(tabId, data.user, userData, data.session.access_token)
             }
-            
-            // Set session storage for owner
-            setTabStorage('isAdmin', 'false')
-            setTabStorage('isOwner', 'true')
-            setTabStorage('hasCompany', 'true')
-            setTabStorage('userRoles', JSON.stringify(['owner']))
             
             window.location.href = '/dashboard'
           }
@@ -431,8 +427,8 @@ export default function HomePage() {
           const supabase = getSupabaseClient()
           
           const { data, error } = await supabase.auth.signInWithPassword({
-            email,
-            password,
+            email: trimmedEmail,
+            password: trimmedPassword,
           })
 
           console.log('Sign in response:', error ? 'Error' : 'Success')
@@ -457,50 +453,21 @@ export default function HomePage() {
             // Successful login - set session storage and redirect to dashboard
             console.log('Login successful! Setting session storage and redirecting to dashboard...')
             
-            // Record login timestamp for completed users
-            try {
-              const updateResponse = await fetch('/api/invite/update-status', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ 
-                  email,
-                  status: 'completed',
-                  completed_at: new Date().toISOString()
-                })
-              })
-              
-              if (updateResponse.ok) {
-                console.log('Login timestamp recorded for completed user')
-                
-                // Log the login activity
-                try {
-                  const { logActivity, ActivityTypes } = await import('../lib/activityLogger')
-                  await logActivity({
-                    user_email: email,
-                    action: ActivityTypes.USER_LOGIN,
-                    description: `User logged in successfully`,
-                    metadata: {
-                      user_email: email,
-                      login_at: new Date().toISOString()
-                    }
-                  })
-                } catch (logError) {
-                  console.error('Error logging login activity:', logError)
-                }
-              } else {
-                console.error('Failed to record login timestamp')
-              }
-            } catch (updateError) {
-              console.error('Error recording login timestamp:', updateError)
+            // Don't update invitation status here - let the signin API handle it properly
+            // The signin API will only mark invitations as 'completed' after admin approval
+            
+            // Store session in tab-specific validation system
+            const tabId = getTabId()
+            const userData = {
+              isAdmin: false,
+              isOwner: true,
+              hasCompany: true,
+              roles: ['owner']
             }
             
-            // Set session storage for owner
-            setTabStorage('isAdmin', 'false')
-            setTabStorage('isOwner', 'true')
-            setTabStorage('hasCompany', 'true')
-            setTabStorage('userRoles', JSON.stringify(['owner']))
+            console.log('Home page: Storing validated session for tab:', tabId, 'User:', data.user.email)
+            storeTabSession(tabId, data.user, userData, data.session.access_token)
+            console.log('Home page: Session stored successfully for tab:', tabId)
             
             window.location.href = '/dashboard'
           }
@@ -536,7 +503,7 @@ export default function HomePage() {
       // Resend the invitation email
       const invitationLink = `${window.location.origin}/invite/accept/${currentInvite.token}`
       
-      const response = await fetch('/api/send-invite-email', {
+      const response = await fetch('/api/resend-invite-email', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -753,6 +720,7 @@ export default function HomePage() {
                 )}
                 
                 {/* Email Admin Button */}
+                {console.log('Login: Button render check - showEmailAdminButton:', showEmailAdminButton, 'currentInvite:', !!currentInvite)}
                 {showEmailAdminButton && currentInvite && (
                   <div className="mt-3">
                     <button

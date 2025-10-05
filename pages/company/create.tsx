@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useSessionTimeout } from '../../lib/useSessionTimeout'
+import SessionTimeoutWarning from '../../components/SessionTimeoutWarning'
 
 // US States data for dropdown
 const US_STATES = [
@@ -78,6 +80,22 @@ export default function CreateCompanyPage() {
   const [phoneError, setPhoneError] = useState('')
   const [firstNameError, setFirstNameError] = useState('')
   const [lastNameError, setLastNameError] = useState('')
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [selectedOwnerId, setSelectedOwnerId] = useState('')
+  const [availableOwners, setAvailableOwners] = useState<any[]>([])
+  const [loadingOwners, setLoadingOwners] = useState(false)
+
+  // Session timeout management
+  const {
+    showWarning,
+    timeRemainingFormatted,
+    extendSession,
+    dismissWarning
+  } = useSessionTimeout({
+    timeoutMinutes: 30,
+    warningMinutes: 5,
+    enabled: !loading && !!user
+  })
 
   // Validation functions
   const validateState = (state: string) => {
@@ -178,21 +196,75 @@ export default function CreateCompanyPage() {
   }
 
   const handleFirstNameChange = (value: string) => {
-    setFirstName(value)
-    const error = validateName(value, 'First name')
+    const trimmedValue = value.trim()
+    setFirstName(trimmedValue)
+    const error = validateName(trimmedValue, 'First name')
     setFirstNameError(error)
   }
 
   const handleLastNameChange = (value: string) => {
-    setLastName(value)
-    const error = validateName(value, 'Last name')
+    const trimmedValue = value.trim()
+    setLastName(trimmedValue)
+    const error = validateName(trimmedValue, 'Last name')
     setLastNameError(error)
+  }
+
+  const loadAvailableOwners = async () => {
+    try {
+      setLoadingOwners(true)
+      const response = await fetch('/api/users/completed', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${user?.access_token || ''}`
+        }
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        // Filter for owners only
+        const owners = data.users?.filter((user: any) => user.role === 'owner') || []
+        setAvailableOwners(owners)
+      } else {
+        console.error('Error loading owners:', response.status)
+      }
+    } catch (error) {
+      console.error('Error loading owners:', error)
+    } finally {
+      setLoadingOwners(false)
+    }
   }
 
   useEffect(() => {
     const checkUser = async () => {
       try {
-        // Import the shared Supabase client
+        // Check if we have invitation data in session storage (new flow)
+        const invitationData = sessionStorage.getItem('invitationData')
+        if (invitationData) {
+          try {
+            const data = JSON.parse(invitationData)
+            console.log('Loading invitation data from session storage:', data)
+            
+            // Set company name and email from invitation data
+            if (data.companyName) {
+              setCompanyName(data.companyName)
+            }
+            if (data.email) {
+              setCompanyEmail(data.email)
+            }
+            
+            // Set user role and company status
+            setUserRoles([data.role])
+            setIsOwner(data.role === 'owner')
+            setHasCompany(false) // They don't have a company yet
+            
+            setLoading(false)
+            return
+          } catch (parseError) {
+            console.error('Error parsing invitation data:', parseError)
+          }
+        }
+
+        // Fallback to authenticated user flow (existing flow)
         const { supabase: getSupabaseClient } = await import('../../lib/supabaseClient')
         const supabase = getSupabaseClient()
         
@@ -205,26 +277,88 @@ export default function CreateCompanyPage() {
 
         setUser(session.user)
         
+        // Check user role - owners and admins can create companies
+        try {
+          const response = await fetch('/api/auth/getUser', {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${session.access_token}`
+            }
+          })
+          
+          if (response.ok) {
+            const userData = await response.json()
+            const isOwner = userData.isOwner || false
+            const isAdmin = userData.isAdmin || false
+            
+            if (!isOwner && !isAdmin) {
+              // Redirect non-owners/non-admins to their dashboard
+              window.location.href = '/dashboard'
+                return
+              }
+
+            setUserRoles(userData.roles || [])
+            setIsOwner(isOwner)
+            setIsAdmin(isAdmin)
+            setHasCompany(userData.hasCompany || false)
+            
+            // If admin, load available owners for selection
+            if (isAdmin) {
+              await loadAvailableOwners()
+            }
+          } else {
+            // If we can't verify role, redirect to login
+            window.location.href = '/'
+            return
+          }
+        } catch (roleError) {
+          console.error('Error checking user role:', roleError)
+          window.location.href = '/'
+                return
+              }
+
         // Check if user has invitation metadata
-        const invitationData = session.user.user_metadata
-        console.log('User metadata:', invitationData)
+        const userMetadata = session.user.user_metadata
+        console.log('User metadata:', userMetadata)
         
-        if (invitationData?.company_name) {
-          console.log('Setting company name from metadata:', invitationData.company_name)
-          setCompanyName(invitationData.company_name)
+        if (userMetadata?.company_name) {
+          console.log('Setting company name from metadata:', userMetadata.company_name)
+          setCompanyName(userMetadata.company_name)
         }
-        if (invitationData?.invited_email) {
-          console.log('Setting company email from metadata:', invitationData.invited_email)
-          setCompanyEmail(invitationData.invited_email)
-        } else {
+        if (userMetadata?.invited_email) {
+          console.log('Setting company email from metadata:', userMetadata.invited_email)
+          setCompanyEmail(userMetadata.invited_email)
+              } else {
           console.log('No invited_email found in metadata, using user email:', session.user.email)
           setCompanyEmail(session.user.email)
         }
 
-        // For now, set default values since we don't have the other APIs yet
-        setUserRoles(['owner']) // Assume owner for company creation
-        setIsOwner(true)
-        setHasCompany(false) // This is a create company page, so assume no company yet
+        // If we don't have invitation data in metadata, try to fetch it from the database
+        if (!userMetadata?.company_name || !userMetadata?.invited_email) {
+          console.log('No invitation data in metadata, fetching from database...')
+          try {
+            const response = await fetch('/api/invite/get-invitation-data', {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${session.access_token}`
+              }
+            })
+            
+            if (response.ok) {
+              const data = await response.json()
+              console.log('Fetched invitation data:', data)
+              
+              if (data.company_name && !companyName) {
+                setCompanyName(data.company_name)
+              }
+              if (data.invited_email && !companyEmail) {
+                setCompanyEmail(data.invited_email)
+              }
+            }
+          } catch (fetchError) {
+            console.error('Error fetching invitation data:', fetchError)
+          }
+        }
 
         setLoading(false)
       } catch (error) {
@@ -263,32 +397,60 @@ export default function CreateCompanyPage() {
 
     try {
       // Get the user's access token for authentication
-      const { supabase: getSupabaseClient } = await import('../../lib/supabaseClient')
-      const supabase = getSupabaseClient()
-      const { data: { session } } = await supabase.auth.getSession()
+      // Check if this is an invitation flow (no session required)
+      const invitationData = sessionStorage.getItem('invitationData')
+      let sessionToken = null
       
-      if (!session?.access_token) {
-        setMessage('Error: No valid session found. Please log in again.')
-        return
+      if (!invitationData) {
+        // Normal flow - user should be logged in
+        const { supabase: getSupabaseClient } = await import('../../lib/supabaseClient')
+        const supabase = getSupabaseClient()
+        const { data: { session } } = await supabase.auth.getSession()
+        
+        if (!session?.access_token) {
+          setMessage('Error: No valid session found. Please log in again.')
+          return
+        }
+        sessionToken = session.access_token
+      }
+      // For invitation flow, we'll send the request without authorization header
+
+      // Get invitation data from session storage
+      let password = ''
+      if (invitationData) {
+        try {
+          const data = JSON.parse(invitationData)
+          password = data.password || ''
+        } catch (error) {
+          console.error('Error parsing invitation data:', error)
+        }
+      }
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      }
+      
+      // Only add authorization header if we have a session token
+      if (sessionToken) {
+        headers['Authorization'] = `Bearer ${sessionToken}`
       }
 
       const response = await fetch('/api/company/create', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
-        },
+        headers,
         body: JSON.stringify({
-          name: companyName,
-          street: companyStreet,
-          city: companyCity,
+          name: companyName.trim(),
+          street: companyStreet.trim(),
+          city: companyCity.trim(),
           state: companyState,
           zip: companyZip,
           phone: companyPhone,
-          email: companyEmail,
+          email: companyEmail.trim(),
           depreciation_rate: depreciationRate,
-          first_name: firstName,
-          last_name: lastName
+          first_name: firstName.trim(),
+          last_name: lastName.trim(),
+          password: password, // Include password for account creation
+          selected_owner_id: isAdmin ? selectedOwnerId : null // Include selected owner for admin-created companies
         })
       })
 
@@ -296,6 +458,7 @@ export default function CreateCompanyPage() {
       console.log('Company creation response:', { status: response.status, result })
 
       if (response.ok) {
+        const company = result.company // Get company from API response
         setMessage('Company created successfully! Checking admin approval...')
         console.log('Company created successfully, checking admin approval...')
         
@@ -303,46 +466,50 @@ export default function CreateCompanyPage() {
         sessionStorage.setItem('hasCompany', 'true')
         console.log('Updated hasCompany flag in session storage')
         
-        // Check if user is approved by admin
-        try {
-          const approvalResponse = await fetch('/api/auth/getUser', {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${session.access_token}`
-            }
-          })
+        // For invitation flow, redirect to login with approval message immediately
+        const invitationData = sessionStorage.getItem('invitationData')
+        console.log('Company create: Checking for invitation data:', invitationData)
+        
+        if (invitationData) {
+          console.log('Company create: Invitation data found, redirecting to login with approval message')
+          setMessage('Company created successfully! Your account is waiting for admin approval. Redirecting to login...')
           
-          const approvalData = await approvalResponse.json()
-          console.log('Admin approval check result:', approvalData)
+          // Clear invitation data from session storage
+          sessionStorage.removeItem('invitationData')
           
-          if (approvalData.isApproved || approvalData.isAdmin) {
-            setMessage('Company created successfully! Redirecting to dashboard...')
-            setTimeout(() => {
-              console.log('User approved or admin, redirecting to dashboard...')
-              window.location.href = '/dashboard'
-            }, 2000)
-          } else {
-            setMessage('Company created successfully! However, your account is waiting for admin approval. You will be redirected to login.')
-            setTimeout(async () => {
-              console.log('User not approved, signing out and redirecting to login...')
-              // Sign out the user from Supabase
-              try {
-                const { supabase: getSupabaseClient } = await import('../../lib/supabaseClient')
-                const supabase = getSupabaseClient()
-                await supabase.auth.signOut()
-              } catch (error) {
-                console.error('Error signing out:', error)
+          // Redirect to login screen after 2 seconds
+          setTimeout(() => {
+            console.log('Company create: Redirecting to login page')
+            window.location.href = '/auth?message=waiting_approval'
+          }, 2000)
+        } else {
+          // Check if user is approved by admin (only for non-invitation flows)
+          try {
+            const approvalResponse = await fetch('/api/auth/getUser', {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${sessionToken}`
               }
-              
-              // Clear all storage
-              sessionStorage.clear()
-              localStorage.clear()
-              
-              // Redirect to login
-              window.location.href = '/auth?message=Your account is waiting for admin approval. Please contact your administrator to approve your account.'
-            }, 3000)
-          }
-        } catch (approvalError) {
+            })
+            
+            const approvalData = await approvalResponse.json()
+            console.log('Admin approval check result:', approvalData)
+            
+            if (approvalData.isApproved || approvalData.isAdmin) {
+              setMessage('Company created successfully! Redirecting to dashboard...')
+              setTimeout(() => {
+                console.log('User approved or admin, redirecting to dashboard...')
+                window.location.href = '/dashboard'
+              }, 2000)
+            } else {
+              setMessage('Company created successfully! Now setting up your password...')
+              setTimeout(async () => {
+                console.log('User not approved, redirecting to password setup...')
+                // Redirect to password setup page
+                window.location.href = '/setup-password'
+              }, 2000)
+            }
+          } catch (approvalError) {
           console.error('Error checking admin approval:', approvalError)
           // If we can't check approval, assume not approved for safety
           setMessage('Company created successfully! However, your account is waiting for admin approval. You will be redirected to login.')
@@ -364,6 +531,7 @@ export default function CreateCompanyPage() {
             // Redirect to login
             window.location.href = '/auth?message=Your account is waiting for admin approval. Please contact your administrator to approve your account.'
           }, 3000)
+          }
         }
       } else {
         console.error('Company creation failed:', result)
@@ -397,19 +565,19 @@ export default function CreateCompanyPage() {
   }
 
   if (hasCompany) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        {/* Header */}
-        <header className="bg-white shadow">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex justify-between items-center py-6">
-              <div className="flex items-center">
-                <div className="h-8 w-8 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full flex items-center justify-center mr-3">
-                  <span className="text-sm font-bold text-white">AT</span>
-                </div>
-                <h1 className="text-2xl font-bold text-gray-900">assetTRAC</h1>
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white shadow">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-6">
+            <div className="flex items-center">
+              <div className="h-8 w-8 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full flex items-center justify-center mr-3">
+                <span className="text-sm font-bold text-white">AT</span>
               </div>
-              <div className="flex items-center space-x-4">
+              <h1 className="text-2xl font-bold text-gray-900">assetTRAC</h1>
+            </div>
+            <div className="flex items-center space-x-4">
                 <div className="flex flex-col items-end">
                   <span className="text-sm text-gray-700">Welcome, {user?.email}</span>
                   {userRoles.length > 0 && (
@@ -560,7 +728,7 @@ export default function CreateCompanyPage() {
             </div>
             <div className="flex items-center space-x-4">
               <div className="flex flex-col items-end">
-                <span className="text-sm text-gray-700">Welcome, {user?.email}</span>
+              <span className="text-sm text-gray-700">Welcome, {user?.email}</span>
                 {userRoles.length > 0 && (
                   <div className="flex items-center space-x-2 mt-1">
                     <span className="text-xs text-gray-500">Role:</span>
@@ -634,28 +802,58 @@ export default function CreateCompanyPage() {
                 <h2 className="text-lg font-medium text-gray-900">Create Company</h2>
                 <p className="mt-1 text-sm text-gray-600">
                   Set up your company profile to get started with assetTRAC
-                </p>
-              </div>
-              
+              </p>
+            </div>
+
               <form onSubmit={handleSubmit} className="px-6 py-6 space-y-6">
-                <div>
+              <div>
                   <label htmlFor="companyName" className="block text-sm font-medium text-gray-700">
-                    Company Name *
-                  </label>
-                  <input
-                    type="text"
+                  Company Name *
+                </label>
+                <input
+                  type="text"
                     id="companyName"
                     value={companyName}
                     onChange={(e) => setCompanyName(e.target.value)}
                     className={`mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm ${
-                      user?.user_metadata?.company_name ? 'bg-green-50 border-green-300 cursor-not-allowed' : ''
+                      (user?.user_metadata?.company_name || sessionStorage.getItem('invitationData')) ? 'bg-green-50 border-green-300 cursor-not-allowed' : ''
                     }`}
                     placeholder="Your Company Name"
-                    required
-                    readOnly={!!user?.user_metadata?.company_name}
-                    disabled={!!user?.user_metadata?.company_name}
-                  />
-                </div>
+                  required
+                    readOnly={!!(user?.user_metadata?.company_name || sessionStorage.getItem('invitationData'))}
+                    disabled={!!(user?.user_metadata?.company_name || sessionStorage.getItem('invitationData'))}
+                />
+              </div>
+
+                {/* Owner Selection - Admin Only */}
+                {isAdmin && (
+                  <div>
+                    <label htmlFor="ownerSelect" className="block text-sm font-medium text-gray-700">
+                      Select Owner *
+                    </label>
+                    <select
+                      id="ownerSelect"
+                      value={selectedOwnerId}
+                      onChange={(e) => setSelectedOwnerId(e.target.value)}
+                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                      required
+                    >
+                      <option value="">Choose an owner...</option>
+                      {loadingOwners ? (
+                        <option disabled>Loading owners...</option>
+                      ) : (
+                        availableOwners.map((owner) => (
+                          <option key={owner.id} value={owner.id}>
+                            {owner.first_name} {owner.last_name} ({owner.email})
+                          </option>
+                        ))
+                      )}
+                    </select>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Select the owner who will manage this company
+                    </p>
+                  </div>
+                )}
 
                 {/* Personal Information Section */}
                 <div>
@@ -684,11 +882,11 @@ export default function CreateCompanyPage() {
                       )}
                     </div>
 
-                    <div>
+              <div>
                       <label htmlFor="lastName" className="block text-sm font-medium text-gray-600">
                         Last Name *
-                      </label>
-                      <input
+                </label>
+                <input
                         type="text"
                         id="lastName"
                         value={lastName}
@@ -704,7 +902,7 @@ export default function CreateCompanyPage() {
                       )}
                     </div>
                   </div>
-                </div>
+              </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-3">
@@ -712,39 +910,39 @@ export default function CreateCompanyPage() {
                   </label>
                   
                   <div className="space-y-4">
-                    <div>
+                <div>
                       <label htmlFor="companyStreet" className="block text-sm font-medium text-gray-600">
-                        Street Address
-                      </label>
-                      <input
-                        type="text"
+                    Street Address
+                  </label>
+                  <input
+                    type="text"
                         id="companyStreet"
                         value={companyStreet}
                         onChange={(e) => setCompanyStreet(e.target.value)}
                         className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-800"
                         placeholder="123 Main Street"
-                      />
-                    </div>
+                  />
+                </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div>
+                <div>
                         <label htmlFor="companyCity" className="block text-sm font-medium text-gray-600">
-                          City
-                        </label>
-                        <input
-                          type="text"
+                    City
+                  </label>
+                  <input
+                    type="text"
                           id="companyCity"
                           value={companyCity}
                           onChange={(e) => setCompanyCity(e.target.value)}
                           className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-800"
-                          placeholder="New York"
-                        />
-                      </div>
+                    placeholder="New York"
+                  />
+                </div>
 
-                      <div>
+                <div>
                         <label htmlFor="companyState" className="block text-sm font-medium text-gray-600">
                           State *
-                        </label>
+                  </label>
                         <select
                           id="companyState"
                           value={companyState}
@@ -763,14 +961,14 @@ export default function CreateCompanyPage() {
                         {stateError && (
                           <p className="mt-1 text-sm text-red-600">{stateError}</p>
                         )}
-                      </div>
+                </div>
 
-                      <div>
+                <div>
                         <label htmlFor="companyZip" className="block text-sm font-medium text-gray-600">
                           ZIP Code *
-                        </label>
-                        <input
-                          type="text"
+                  </label>
+                  <input
+                    type="text"
                           id="companyZip"
                           value={companyZip}
                           onChange={(e) => handleZipChange(e.target.value)}
@@ -785,52 +983,52 @@ export default function CreateCompanyPage() {
                         )}
                       </div>
                     </div>
-                  </div>
                 </div>
+              </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div>
+                <div>
                     <label htmlFor="companyPhone" className="block text-sm font-medium text-gray-700">
                       Phone *
-                    </label>
-                    <input
-                      type="tel"
+                  </label>
+                  <input
+                    type="tel"
                       id="companyPhone"
                       value={companyPhone}
                       onChange={(e) => handlePhoneChange(e.target.value)}
                       className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-800 ${
                         phoneError ? 'border-red-300' : 'border-gray-300'
                       }`}
-                      placeholder="(555) 123-4567"
+                    placeholder="(555) 123-4567"
                       maxLength={14}
-                    />
+                  />
                     {phoneError && (
                       <p className="mt-1 text-sm text-red-600">{phoneError}</p>
                     )}
-                  </div>
+                </div>
 
-                  <div>
+                <div>
                     <label htmlFor="companyEmail" className="block text-sm font-medium text-gray-700">
                       Email
-                    </label>
-                    <input
-                      type="email"
+                  </label>
+                  <input
+                    type="email"
                       id="companyEmail"
                       value={companyEmail}
                       onChange={(e) => setCompanyEmail(e.target.value)}
                       className={`mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm ${
-                        user?.user_metadata?.invited_email ? 'bg-green-50 border-green-300 cursor-not-allowed' : ''
+                        (user?.user_metadata?.invited_email || companyEmail !== user?.email || sessionStorage.getItem('invitationData')) ? 'bg-green-50 border-green-300 cursor-not-allowed' : ''
                       }`}
                       placeholder="contact@yourcompany.com"
-                      readOnly={!!user?.user_metadata?.invited_email}
-                      disabled={!!user?.user_metadata?.invited_email}
+                      readOnly={!!(user?.user_metadata?.invited_email || companyEmail !== user?.email || sessionStorage.getItem('invitationData'))}
+                      disabled={!!(user?.user_metadata?.invited_email || companyEmail !== user?.email || sessionStorage.getItem('invitationData'))}
                     />
-                  </div>
+              </div>
 
-                  <div>
+              <div>
                     <label htmlFor="depreciationRate" className="block text-sm font-medium text-gray-700">
                       Depreciation Rate (%)
-                    </label>
+                </label>
                     <input
                       type="number"
                       id="depreciationRate"
@@ -841,8 +1039,8 @@ export default function CreateCompanyPage() {
                       max="100"
                       step="0.01"
                       placeholder="7.5"
-                    />
-                  </div>
+                />
+              </div>
                 </div>
 
                 {message && (
@@ -863,19 +1061,27 @@ export default function CreateCompanyPage() {
                   >
                     Cancel
                   </button>
-                  <button
-                    type="submit"
-                    disabled={submitting}
+                <button
+                  type="submit"
+                  disabled={submitting}
                     className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
+                >
                     {submitting ? 'Creating...' : 'Create Company'}
-                  </button>
-                </div>
-              </form>
-            </div>
+                </button>
+              </div>
+            </form>
+              </div>
           </div>
         </div>
       </main>
+      
+      {/* Session Timeout Warning */}
+      <SessionTimeoutWarning
+        show={showWarning}
+        timeRemaining={timeRemainingFormatted}
+        onExtend={extendSession}
+        onDismiss={dismissWarning}
+      />
     </div>
   )
 }

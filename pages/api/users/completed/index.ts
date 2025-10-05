@@ -55,6 +55,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         invited_email,
         role,
         company_name,
+        company_id,
         completed_at,
         admin_approved_at,
         admin_approved_by
@@ -89,6 +90,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       email: invite.invited_email,
       role: invite.role,
       company_name: invite.company_name,
+      company_id: invite.company_id,
       first_name: invite.profile?.first_name || null,
       last_name: invite.profile?.last_name || null,
       completed_at: invite.completed_at,

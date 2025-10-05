@@ -1,5 +1,24 @@
 import { NextApiRequest, NextApiResponse } from 'next'
-import { supabase } from '../../../../lib/supabaseClient'
+import { createClient } from '@supabase/supabase-js'
+
+// Bypass SSL for development
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  {
+    auth: {
+      autoRefreshToken: true,
+      persistSession: false
+    }
+  }
+)
+
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -18,10 +37,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const token = authHeader.substring(7) // Remove 'Bearer ' prefix
     console.log('Admin invitations API: Token received, length:', token.length)
+    console.log('Admin invitations API: Token preview:', token.substring(0, 50) + '...')
     
-    // Get the current user's session using the token
-    const supabaseClient = supabase()
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser(token)
+    // Create a client for token validation using anon key
+    const { createClient } = await import('@supabase/supabase-js')
+    const anonClient = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        auth: {
+          autoRefreshToken: true,
+          persistSession: false
+        }
+      }
+    )
+    
+    // Get the current user's session using the anon client for token validation
+    const { data: { user }, error: userError } = await anonClient.auth.getUser(token)
     
     if (userError || !user) {
       console.log('Admin invitations API: Invalid token or user error:', userError)
@@ -30,12 +62,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     console.log('Admin invitations API: User authenticated:', user.email)
 
+    // Use admin client for database operations
+    const adminClient = supabaseAdmin
+    
+    console.log('Admin invitations API: Checking user permissions for user ID:', user.id)
+    
     // Check if user has permission to view invitations (admin, owner, or manager)
-    const { data: companyUser, error: companyUserError } = await supabaseClient
+    const { data: companyUser, error: companyUserError } = await adminClient
       .from('company_users')
       .select('role')
       .eq('user_id', user.id)
       .single()
+
+    console.log('Admin invitations API: Company user query result:', { companyUser, companyUserError })
 
     if (companyUserError || !companyUser) {
       console.log('User role check failed:', { companyUserError, companyUser })
@@ -50,41 +89,69 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(403).json({ error: 'Insufficient permissions to view invitations' })
     }
 
-    // For now, let's try to get the first company (similar to other APIs)
-    // This is a temporary solution until we have proper user-company associations
-    console.log('Admin invitations API: Getting first company (temporary solution)')
-    const { data: companies, error: companiesError } = await supabaseClient
-      .from('companies')
-      .select('id')
-      .limit(1)
+    // Get the admin's company_id
+    const { data: adminCompanyUser, error: adminCompanyUserError } = await adminClient
+      .from('company_users')
+      .select('company_id')
+      .eq('user_id', user.id)
+      .single()
 
-    console.log('Admin invitations API: Companies lookup result:', { companies, companiesError })
+    console.log('Admin invitations API: Admin company user query result:', { adminCompanyUser, adminCompanyUserError })
 
-    if (companiesError || !companies || companies.length === 0) {
-      console.log('Admin invitations API: No companies found')
-      return res.status(400).json({ error: 'No companies found' })
+    if (adminCompanyUserError || !adminCompanyUser) {
+      console.log('Admin invitations API: Admin not associated with a company')
+      return res.status(400).json({ error: 'Admin not associated with a company' })
     }
 
-    const companyId = companies[0].id
+    const companyId = adminCompanyUser.company_id
     console.log('Admin invitations API: Using company ID:', companyId)
 
-    // Get all invitations (temporarily without company filter to test)
-    console.log('Admin invitations API: Fetching all invitations (no company filter)')
-    const { data: invitations, error: invitationsError } = await supabaseClient
+    // Get invitations for the admin's company, including those without company_id (legacy)
+    console.log('Admin invitations API: Fetching invitations for company:', companyId)
+    const { data: invitations, error: invitationsError } = await adminClient
       .from('invites')
       .select('*')
+      .or(`company_id.eq.${companyId},company_id.is.null`)
+      .neq('status', 'completed')
       .order('created_at', { ascending: false })
 
-    console.log('Admin invitations API: Invitations query result:', { invitations, invitationsError })
+    console.log('Admin invitations API: Invitations query result:', { 
+      invitationsCount: invitations?.length || 0, 
+      invitations, 
+      invitationsError 
+    })
 
     if (invitationsError) {
       console.error('Error fetching invitations:', invitationsError)
       return res.status(500).json({ error: 'Failed to fetch invitations' })
     }
 
-    return res.status(200).json({ invitations: invitations || [] })
+    // Update any invitations without company_id (legacy fix)
+    if (invitations && invitations.length > 0) {
+      const invitationsWithoutCompanyId = invitations.filter(inv => !inv.company_id)
+      if (invitationsWithoutCompanyId.length > 0) {
+        console.log('Admin invitations API: Updating invitations without company_id:', invitationsWithoutCompanyId.length)
+        const { error: updateError } = await adminClient
+          .from('invites')
+          .update({ company_id: companyId })
+          .in('id', invitationsWithoutCompanyId.map(inv => inv.id))
+        
+        if (updateError) {
+          console.error('Error updating invitations with company_id:', updateError)
+        } else {
+          console.log('Admin invitations API: Successfully updated invitations with company_id')
+        }
+      }
+    }
+
+    console.log('Admin invitations API: Returning invitations:', invitations?.length || 0)
+    return res.status(200).json(invitations || [])
   } catch (error) {
     console.error('Error in invitations API:', error)
-    return res.status(500).json({ error: 'Internal server error' })
+    console.error('Error details:', JSON.stringify(error, null, 2))
+    return res.status(500).json({ 
+      error: 'Internal server error',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    })
   }
 }

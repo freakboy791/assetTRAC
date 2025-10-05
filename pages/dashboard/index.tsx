@@ -1,38 +1,10 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Invitation } from '../../types'
-
-// Window-specific storage utility using localStorage with unique window ID
-const getWindowId = () => {
-  let windowId = localStorage.getItem('windowId')
-  if (!windowId) {
-    // Create a unique window identifier using performance.now() for better uniqueness
-    windowId = `win_${Date.now()}_${performance.now()}_${Math.random().toString(36).substr(2, 9)}`
-    localStorage.setItem('windowId', windowId)
-  }
-  return windowId
-}
-
-const setTabStorage = (key: string, value: string) => {
-  const windowId = getWindowId()
-  localStorage.setItem(`${windowId}_${key}`, value)
-}
-
-const getTabStorage = (key: string) => {
-  const windowId = getWindowId()
-  return localStorage.getItem(`${windowId}_${key}`)
-}
-
-const clearTabStorage = () => {
-  const windowId = getWindowId()
-  const keys = Object.keys(localStorage)
-  keys.forEach(key => {
-    if (key.startsWith(`${windowId}_`)) {
-      localStorage.removeItem(key)
-    }
-  })
-  localStorage.removeItem('windowId')
-}
+import { validateTabSession, storeTabSession, clearTabSession, getCurrentTabId as getTabId, validateSessionWithServer, updateLastActivity } from '../../lib/sessionValidator'
+import { validateAndRefreshSession, updateActivityWithRefresh, handleSessionError } from '../../lib/enhancedSessionManager'
+import { useSessionTimeout } from '../../lib/useSessionTimeout'
+import SessionTimeoutWarning from '../../components/SessionTimeoutWarning'
 
 export default function DashboardPage() {
   const [user, setUser] = useState<any>(null)
@@ -44,154 +16,73 @@ export default function DashboardPage() {
   const [invitations, setInvitations] = useState<Invitation[]>([])
   const [invitationsLoading, setInvitationsLoading] = useState(false)
   const [companyData, setCompanyData] = useState<any>(null)
+  const [companyLoading, setCompanyLoading] = useState(false)
   const [recentActivity, setRecentActivity] = useState<any[]>([])
   const [completedUsers, setCompletedUsers] = useState<any[]>([])
   const [activityLoading, setActivityLoading] = useState(false)
   const [usersLoading, setUsersLoading] = useState(false)
 
+  // Session timeout management
+  const {
+    showWarning,
+    timeRemainingFormatted,
+    extendSession,
+    dismissWarning
+  } = useSessionTimeout({
+    timeoutMinutes: 30,
+    warningMinutes: 5,
+    enabled: !loading && !!user
+  })
+
   useEffect(() => {
     const checkUser = async () => {
       console.log('Dashboard: Checking user authentication...')
+      console.log('Dashboard: Current tab ID:', getTabId())
+      
       try {
-        // Import the shared Supabase client
-        const { supabase: getSupabaseClient } = await import('../../lib/supabaseClient')
-        const supabase = getSupabaseClient()
+        // Check if this tab already has a validated session with enhanced validation
+        const tabId = getTabId()
+        const { session: validatedSession, error: sessionError } = await validateAndRefreshSession(tabId)
         
-        const { data: { session }, error } = await supabase.auth.getSession()
-        console.log('Dashboard: Session check result:', error ? 'Error' : 'Success')
-        console.log('Dashboard: Session data:', session ? 'Session found' : 'No session')
-        
-        if (!session?.user) {
-          console.log('Dashboard: No user found, redirecting to home')
-          window.location.href = '/'
+        if (sessionError) {
+          console.log('Dashboard: Session validation failed:', sessionError.message)
+          handleSessionError(sessionError)
           return
         }
 
-        console.log('Dashboard: User found:', session.user.email)
-        setUser(session.user)
-
-        // Check if user is approved by admin
-        try {
-          const approvalResponse = await fetch('/api/auth/getUser', {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${session.access_token}`
-            }
-          })
+        if (validatedSession) {
+          setUser(validatedSession.user)
+          setIsAdmin(validatedSession.userData.isAdmin || false)
+          setIsOwner(validatedSession.userData.isOwner || false)
+          setHasCompany(validatedSession.userData.hasCompany || false)
+          setUserRoles(validatedSession.userData.roles || [])
+          setLoading(false)
           
-          const approvalData = await approvalResponse.json()
-          console.log('Dashboard: Admin approval check result:', approvalData)
+          // Update last activity timestamp with enhanced session management
+          const { success: activitySuccess, error: activityError } = await updateActivityWithRefresh(tabId)
+          if (activityError) {
+            console.log('Dashboard: Activity update failed:', activityError.message)
+            handleSessionError(activityError)
+            return
+          }
           
-          // Allow admins to bypass approval check
-          if (!approvalData.isApproved && !approvalData.isAdmin) {
-            console.log('Dashboard: User not approved and not admin, redirecting to login')
-            // Sign out the user
-            await supabase.auth.signOut()
-            sessionStorage.clear()
-            localStorage.clear()
-            window.location.href = '/auth?message=Your account is waiting for admin approval. Please contact your administrator to approve your account.'
-          return
-        }
-
-        } catch (approvalError) {
-          console.error('Dashboard: Error checking admin approval:', approvalError)
-          // If we can't check approval, assume not approved for safety
-          await supabase.auth.signOut()
-          sessionStorage.clear()
-          localStorage.clear()
-          window.location.href = '/auth?message=Your account is waiting for admin approval. Please contact your administrator to approve your account.'
-          return
-        }
-
-        // Get role information from tab-specific session storage (set during login)
-        const storedRoles = getTabStorage('userRoles')
-        const storedIsAdmin = getTabStorage('isAdmin')
-        const storedIsOwner = getTabStorage('isOwner')
-        const storedHasCompany = getTabStorage('hasCompany')
-
-        let roles: string[] = []
-        let isOwnerRole = false
-        let hasCompanyData = false
-        let isAdminRole = false
-
-        if (storedRoles) {
-          roles = JSON.parse(storedRoles)
-          isOwnerRole = storedIsOwner === 'true'
-          hasCompanyData = storedHasCompany === 'true'
-          isAdminRole = storedIsAdmin === 'true'
-        } else {
-          // Fallback: check user metadata if session storage is empty
-          const userMetadata = session.user.user_metadata
-          roles = userMetadata?.roles || []
-          isOwnerRole = userMetadata?.isOwner || false
-          hasCompanyData = userMetadata?.hasCompany || false
-          isAdminRole = userMetadata?.isAdmin || false
-        }
-
-
-
-          setUserRoles(roles)
-        setIsAdmin(isAdminRole)
-        setIsOwner(isOwnerRole)
-        setHasCompany(hasCompanyData)
-
-        // CRITICAL: Redirect admin users to admin dashboard
-        if (isAdminRole || roles.includes('admin')) {
-          console.log('Dashboard: Admin user detected, redirecting to admin dashboard')
-          window.location.href = '/admin/dashboard'
-          return
-        }
-
-        // If owner but no company, check database to be sure
-        if (isOwnerRole && !hasCompanyData) {
-          console.log('Dashboard: Owner with no company in session storage, checking database...')
+          // Load data for dashboard
+          await loadCompanyData()
+          await loadRecentActivity()
+          await loadCompletedUsers()
           
-          // Check if user actually has a company in the database
-          const { data: companyUsers, error: companyError } = await supabase
-              .from('company_users')
-              .select('company_id')
-            .eq('user_id', session.user.id)
-            .limit(1)
-          
-          if (companyError) {
-            console.error('Dashboard: Error checking company association:', companyError)
-          } else if (companyUsers && companyUsers.length > 0) {
-            console.log('Dashboard: User has company in database, updating session storage')
-            setTabStorage('hasCompany', 'true')
-              setHasCompany(true)
-            } else {
-            console.log('Dashboard: Owner with no company, redirecting to company creation')
-              window.location.href = '/company/create'
               return
             }
-          }
 
-        // Load invitations if user is admin
-        if (isAdminRole) {
-          console.log('Dashboard: User is admin, loading invitations...')
-          await loadInvitations()
-        }
-        
-        
-        // Load recent activity for all users
-        await loadRecentActivity()
-        
-        // Load completed users if user has permission
-        if (isAdminRole || isOwner || userRoles.some(role => role.startsWith('manager'))) {
-          await loadCompletedUsers()
-        }
-
-        // Load company data for viewer/tech roles to show company recap
-        if (hasCompanyData && (roles.includes('viewer') || roles.includes('tech'))) {
-          console.log('Dashboard: Loading company data for viewer/tech role...')
-          await loadCompanyData()
-        }
-
-        console.log('Dashboard: Setting loading to false')
-        setLoading(false)
+        // If no validated session, redirect to login
+        console.log('Dashboard: No validated session found, redirecting to login')
+        window.location.href = '/'
+              return
       } catch (error) {
         console.error('Dashboard: Error checking user:', error)
         window.location.href = '/'
+      } finally {
+        setLoading(false)
       }
     }
 
@@ -200,11 +91,31 @@ export default function DashboardPage() {
 
   const handleSignOut = async () => {
     try {
+      console.log('Dashboard: Starting sign out process...')
+      
+      // Clear tab-specific session storage
+      const tabId = getTabId()
+      console.log('Dashboard: Clearing tab session for tab:', tabId)
+      clearTabSession(tabId)
+      
       // Import the shared Supabase client
       const { supabase: getSupabaseClient } = await import('../../lib/supabaseClient')
       const supabase = getSupabaseClient()
       
+      // Clear Supabase session
+      console.log('Dashboard: Clearing Supabase session...')
       await supabase.auth.signOut()
+      
+      // Clear all state
+      setUser(null)
+      setIsAdmin(false)
+      setIsOwner(false)
+      setHasCompany(false)
+      setUserRoles([])
+      
+      console.log('Dashboard: Sign out complete, redirecting to login...')
+      
+      // Force redirect to login page
       window.location.href = '/'
     } catch (error) {
       console.error('Error signing out:', error)
@@ -215,14 +126,31 @@ export default function DashboardPage() {
 
   const loadCompanyData = async () => {
     try {
-      const response = await fetch('/api/company/get')
-      const data = await response.json()
+      setCompanyLoading(true)
       
+      // Get the current tab-specific session token with enhanced validation
+      const tabId = getTabId()
+      const { session: validatedSession, error: sessionError } = await validateAndRefreshSession(tabId)
+      
+      if (sessionError || !validatedSession || !validatedSession.accessToken) {
+        console.error('Dashboard: No valid session found for company data:', sessionError?.message)
+        return
+      }
+
+      const response = await fetch('/api/company/get', {
+        headers: {
+          'Authorization': `Bearer ${validatedSession.accessToken}`
+        }
+      })
+      const data = await response.json()
+
       if (data.company) {
         setCompanyData(data.company)
       }
     } catch (error) {
       console.error('Error loading company data:', error)
+    } finally {
+      setCompanyLoading(false)
     }
   }
 
@@ -230,19 +158,19 @@ export default function DashboardPage() {
     try {
       setInvitationsLoading(true)
       
-      // Get the current session token
-      const { supabase: getSupabaseClient } = await import('../../lib/supabaseClient')
-      const supabase = getSupabaseClient()
-      const { data: { session } } = await supabase.auth.getSession()
+      // Get the current tab-specific session token with enhanced validation
+      const tabId = getTabId()
+      const { session: validatedSession, error: sessionError } = await validateAndRefreshSession(tabId)
       
-      if (!session?.access_token) {
-        console.error('No session token available')
+      if (sessionError || !validatedSession || !validatedSession.accessToken) {
+        console.error('Dashboard: No valid session found for invitations:', sessionError?.message)
+        setInvitations([])
         return
       }
 
       const response = await fetch('/api/admin/invitations', {
         headers: {
-          'Authorization': `Bearer ${session.access_token}`
+          'Authorization': `Bearer ${validatedSession.accessToken}`
         }
       })
       const data = await response.json()
@@ -263,13 +191,26 @@ export default function DashboardPage() {
   const loadRecentActivity = async () => {
     setActivityLoading(true)
     try {
+      // Get the current tab-specific session token with enhanced validation
+      const tabId = getTabId()
+      const { session: validatedSession, error: sessionError } = await validateAndRefreshSession(tabId)
+      
+      if (sessionError || !validatedSession || !validatedSession.accessToken) {
+        console.error('Dashboard: No valid session found for recent activity:', sessionError?.message)
+        setRecentActivity([])
+        return
+      }
+      
       // Get current user info for role-based filtering
       const userEmail = user?.email || ''
-      const storedRoles = getTabStorage('userRoles')
-      const userRolesFromStorage = storedRoles ? JSON.parse(storedRoles) : []
-      const userRolesString = JSON.stringify(userRolesFromStorage)
+      const userRolesFromSession = validatedSession?.userData?.roles || []
+      const userRolesString = JSON.stringify(userRolesFromSession)
       
-      const response = await fetch(`/api/activity/log?limit=10&user_email=${encodeURIComponent(userEmail)}&user_roles=${encodeURIComponent(userRolesString)}`)
+      const response = await fetch(`/api/activity/log?limit=10&user_email=${encodeURIComponent(userEmail)}&user_roles=${encodeURIComponent(userRolesString)}`, {
+        headers: {
+          'Authorization': `Bearer ${validatedSession.accessToken}`
+        }
+      })
       
       if (response.ok) {
         const data = await response.json()
@@ -289,19 +230,19 @@ export default function DashboardPage() {
     
     setUsersLoading(true)
     try {
-      // Get the current session token
-      const { supabase: getSupabaseClient } = await import('../../lib/supabaseClient')
-      const supabase = getSupabaseClient()
-      const { data: { session } } = await supabase.auth.getSession()
+      // Get the current tab-specific session token with enhanced validation
+      const tabId = getTabId()
+      const { session: validatedSession, error: sessionError } = await validateAndRefreshSession(tabId)
       
-      if (!session?.access_token) {
-        console.error('No session token available')
+      if (sessionError || !validatedSession || !validatedSession.accessToken) {
+        console.error('Dashboard: No valid session found for completed users:', sessionError?.message)
+        setCompletedUsers([])
         return
       }
 
       const response = await fetch('/api/users/completed', {
         headers: {
-          'Authorization': `Bearer ${session.access_token}`
+          'Authorization': `Bearer ${validatedSession.accessToken}`
         }
       })
       
@@ -320,13 +261,12 @@ export default function DashboardPage() {
 
   const handleApprove = async (invitationId: number) => {
     try {
-      // Get the current session token
-      const { supabase: getSupabaseClient } = await import('../../lib/supabaseClient')
-      const supabase = getSupabaseClient()
-      const { data: { session } } = await supabase.auth.getSession()
+      // Get the current tab-specific session token with enhanced validation
+      const tabId = getTabId()
+      const { session: validatedSession, error: sessionError } = await validateAndRefreshSession(tabId)
       
-      if (!session?.access_token) {
-        console.error('No session token available')
+      if (sessionError || !validatedSession || !validatedSession.accessToken) {
+        console.error('Dashboard: No valid session found for approving user:', sessionError?.message)
         return
       }
 
@@ -334,7 +274,7 @@ export default function DashboardPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
+          'Authorization': `Bearer ${validatedSession.accessToken}`
         },
         body: JSON.stringify({ invitationId }),
       })
@@ -352,13 +292,12 @@ export default function DashboardPage() {
 
   const handleReject = async (invitationId: number) => {
     try {
-      // Get the current session token
-      const { supabase: getSupabaseClient } = await import('../../lib/supabaseClient')
-      const supabase = getSupabaseClient()
-      const { data: { session } } = await supabase.auth.getSession()
+      // Get the current tab-specific session token with enhanced validation
+      const tabId = getTabId()
+      const { session: validatedSession, error: sessionError } = await validateAndRefreshSession(tabId)
       
-      if (!session?.access_token) {
-        console.error('No session token available')
+      if (sessionError || !validatedSession || !validatedSession.accessToken) {
+        console.error('Dashboard: No valid session found for rejecting invitation:', sessionError?.message)
         return
       }
 
@@ -366,7 +305,7 @@ export default function DashboardPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
+          'Authorization': `Bearer ${validatedSession.accessToken}`
         },
         body: JSON.stringify({ invitationId }),
       })
@@ -410,9 +349,9 @@ export default function DashboardPage() {
     }
   }
 
-  // Helper function to check if user can manage company
+  // Helper function to check if user can manage company (admin and owner only)
   const canManageCompany = () => {
-    return userRoles.includes('admin') || userRoles.includes('owner') || userRoles.some(role => role.startsWith('manager'))
+    return userRoles.includes('admin') || userRoles.includes('owner')
   }
 
   // Helper function to check if user should see company recap
@@ -445,6 +384,12 @@ export default function DashboardPage() {
                 </div>
                 <h1 className="text-lg font-bold text-gray-900">assetTRAC</h1>
               </div>
+              <button
+                onClick={() => window.location.href = '/profile'}
+                className="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors"
+              >
+                Profile
+              </button>
               <button
                 onClick={handleSignOut}
                 className="bg-red-600 text-white px-4 py-2 rounded-md text-sm hover:bg-red-700 transition-colors"
@@ -530,6 +475,12 @@ export default function DashboardPage() {
                 )}
               </div>
               <button
+                onClick={() => window.location.href = '/profile'}
+                className="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors"
+              >
+                Profile
+              </button>
+              <button
                 onClick={handleSignOut}
                 className="bg-red-600 text-white px-4 py-2 rounded-md text-sm hover:bg-red-700 transition-colors"
               >
@@ -580,8 +531,15 @@ export default function DashboardPage() {
           {shouldShowCompanyRecap() && companyData && (
             <div className="mb-8">
               <div className="bg-white shadow rounded-lg">
-                <div className="px-6 py-4 border-b border-gray-200">
+                <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
                   <h3 className="text-lg font-medium text-gray-900">Company Information</h3>
+                  <button
+                    onClick={loadCompanyData}
+                    disabled={companyLoading}
+                    className="bg-indigo-600 text-white px-3 py-1 rounded-md text-sm hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                  >
+                    {companyLoading ? 'Loading...' : 'Refresh'}
+                  </button>
                 </div>
                 <div className="px-6 py-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -645,8 +603,8 @@ export default function DashboardPage() {
                 </div>
               )}
 
-            {/* Company Actions - Only for admin/owner/manager roles */}
-            {hasCompany && canManageCompany() && (
+            {/* Company Management - Admin Only */}
+            {hasCompany && isAdmin && (
               <div className="bg-white overflow-hidden shadow rounded-lg">
                 <div className="p-6">
                   <div className="flex items-center">
@@ -659,54 +617,35 @@ export default function DashboardPage() {
                     </div>
                     <div className="ml-4">
                       <h3 className="text-lg font-medium text-gray-900">Company Management</h3>
-                      <p className="text-sm text-gray-500">Manage your company settings</p>
+                      <p className="text-sm text-gray-500">View and manage your company information</p>
                     </div>
                   </div>
                   <div className="mt-4">
-                    <button
-                      onClick={() => window.location.href = '/company/manage'}
-                      className="w-full bg-blue-600 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-700 transition-colors"
+                    <Link
+                      href="/profile"
+                      className="w-full bg-blue-600 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-700 transition-colors inline-block text-center"
                     >
-                      Manage Company
-                    </button>
+                      View Company Profile
+                    </Link>
                   </div>
                   </div>
                 </div>
               )}
 
-            {/* Create Company */}
-            {!hasCompany && (
-              <div className="bg-white overflow-hidden shadow rounded-lg">
-                <div className="p-6">
-                  <div className="flex items-center">
-                    <div className="flex-shrink-0">
-                      <div className="w-8 h-8 bg-yellow-100 rounded-md flex items-center justify-center">
-                        <svg className="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                        </svg>
-                      </div>
-                    </div>
-                    <div className="ml-4">
-                      <h3 className="text-lg font-medium text-gray-900">Create Company</h3>
-                      <p className="text-sm text-gray-500">Set up your company profile</p>
-                    </div>
-                  </div>
-                  <div className="mt-4">
-                    <button
-                      onClick={() => window.location.href = '/company/create'}
-                      className="w-full bg-yellow-600 text-white px-4 py-2 rounded-md text-sm hover:bg-yellow-700 transition-colors"
-                    >
-                      Create Company
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Recent Activity */}
           <div className="mb-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Recent Activity</h2>
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-gray-900">Recent Activity</h2>
+                    <button
+                onClick={loadRecentActivity}
+                disabled={activityLoading}
+                className="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                    >
+                {activityLoading ? 'Loading...' : 'Refresh'}
+                    </button>
+            </div>
             <div className="bg-white shadow rounded-lg">
               <div className="px-6 py-4">
                 {activityLoading ? (
@@ -896,6 +835,14 @@ export default function DashboardPage() {
 
         </div>
       </main>
+
+      {/* Session Timeout Warning */}
+      <SessionTimeoutWarning
+        show={showWarning}
+        timeRemaining={timeRemainingFormatted}
+        onExtend={extendSession}
+        onDismiss={dismissWarning}
+      />
     </div>
   )
 }

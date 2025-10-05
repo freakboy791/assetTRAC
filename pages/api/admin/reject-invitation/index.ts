@@ -21,13 +21,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const token = authHeader.substring(7) // Remove 'Bearer ' prefix
     
+    // Create a client for token validation using anon key
+    const { createClient } = await import('@supabase/supabase-js')
+    const anonClient = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        auth: {
+          autoRefreshToken: true,
+          persistSession: false
+        }
+      }
+    )
+    
     // Get the current user's session using the token
-    const supabaseClient = supabase()
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser(token)
+    const { data: { user }, error: userError } = await anonClient.auth.getUser(token)
     
     if (userError || !user) {
       return res.status(401).json({ error: 'Invalid token' })
     }
+    
+    // Use admin client for database operations
+    const supabaseClient = supabase()
 
     // Get user's company_id and role from company_users table
     const { data: companyUser, error: companyUserError } = await supabaseClient
@@ -65,14 +80,38 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { error: updateError } = await supabaseClient
       .from('invites')
       .update({ 
-        status: 'expired',
-        admin_rejected_at: new Date().toISOString()
+        status: 'rejected',
+        admin_rejected_at: new Date().toISOString(),
+        admin_rejected_by: user.id
       })
       .eq('id', invitationId)
 
     if (updateError) {
       console.error('Error rejecting invitation:', updateError)
       return res.status(500).json({ error: 'Failed to reject invitation' })
+    }
+
+    // Log the rejection activity
+    try {
+      await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/activity/log`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_id: user.id,
+          user_email: user.email || 'unknown',
+          action: 'USER_REJECTED',
+          description: `Rejected user invitation for ${invitation.invited_email} (${invitation.role})`,
+          metadata: {
+            rejected_user_email: invitation.invited_email,
+            rejected_user_role: invitation.role,
+            invitation_id: invitation.id
+          }
+        })
+      })
+    } catch (logError) {
+      console.error('Error logging rejection activity:', logError)
     }
 
     return res.status(200).json({ success: true })
