@@ -37,13 +37,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // List all assets for the company, optionally filtered by container or assigned user
       const { container_id, assigned_to } = req.query
       
+      // Normalize query parameters to strings (Next.js can return string | string[])
+      const containerId = Array.isArray(container_id) ? container_id[0] : container_id
+      const assignedTo = Array.isArray(assigned_to) ? assigned_to[0] : assigned_to
+      
       let query = supabaseAdmin()
         .from('assets')
         .select('*')
         .eq('company_id', companyId)
 
-      if (container_id) {
-        if (container_id === 'null' || container_id === '') {
+      if (containerId) {
+        if (containerId === 'null' || containerId === '') {
           // Assets with no container - these should have assigned_to = null
           query = query.is('container_id', null).is('assigned_to', null)
         } else {
@@ -51,7 +55,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           const { data: container, error: containerError } = await supabaseAdmin()
             .from('asset_containers')
             .select('id, name, user_id')
-            .eq('id', container_id)
+            .eq('id', containerId)
             .single()
           
           if (containerError || !container) {
@@ -141,11 +145,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             const { data: userContainers, error: userContainersError } = await supabaseAdmin()
               .from('asset_containers')
               .select('user_id')
-              .eq('parent_container_id', container_id)
+              .eq('parent_container_id', containerId)
               .eq('company_id', companyId)
               .not('user_id', 'is', null)
             
-            console.log(`[API] Filtering by department container ${container_id}`)
+            console.log(`[API] Filtering by department container ${containerId}`)
             console.log(`[API] Found ${userContainers?.length || 0} user containers`)
             
             if (userContainersError) {
@@ -166,14 +170,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             // Show assets assigned to any of these users
             // IMPORTANT: If assigned_to filter is also set, it will override this
             // So we need to handle the case where both are set
-            if (assigned_to && assigned_to !== 'null' && assigned_to !== '') {
+            if (assignedTo && assignedTo !== 'null' && assignedTo !== '') {
               // Both container and user filter - user filter takes precedence but verify user is in container
-              if (userIds.includes(assigned_to)) {
-                query = query.eq('assigned_to', assigned_to)
+              if (userIds.includes(assignedTo)) {
+                query = query.eq('assigned_to', assignedTo)
                 console.log(`[API] Both filters set - using assigned_to filter (user is in container)`)
               } else {
                 // User is not in this container - return empty
-                console.log(`[API] User ${assigned_to} is not in container ${container_id}, returning empty`)
+                console.log(`[API] User ${assignedTo} is not in container ${containerId}, returning empty`)
                 return res.status(200).json({ assets: [] })
               }
             } else {
@@ -209,7 +213,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         console.log(`[API] Applied assigned_to filter: ${assigned_to}`)
       }
 
-      console.log(`[API] Executing query with filters - container_id: ${container_id || 'none'}, assigned_to: ${assigned_to || 'none'}`)
+      console.log(`[API] Executing query with filters - container_id: ${containerId || 'none'}, assigned_to: ${assignedTo || 'none'}`)
       
       // Debug: Log the query structure before execution
       try {
@@ -223,12 +227,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
 
         // If we got 0 assets but were filtering by a department container, double-check
-        if (assets && assets.length === 0 && container_id && !assigned_to) {
+        if (assets && assets.length === 0 && containerId && !assignedTo) {
           // Verify the container exists and has user containers
           const { data: verifyContainer } = await supabaseAdmin()
             .from('asset_containers')
             .select('id, name, user_id, parent_container_id')
-            .eq('id', container_id)
+            .eq('id', containerId)
             .single()
           
           if (verifyContainer && !verifyContainer.user_id) {
@@ -236,7 +240,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             const { data: userContainers } = await supabaseAdmin()
               .from('asset_containers')
               .select('user_id')
-              .eq('parent_container_id', container_id)
+              .eq('parent_container_id', containerId)
               .not('user_id', 'is', null)
             
             console.log(`[API] Verification: Found ${userContainers?.length || 0} user containers under department`)
