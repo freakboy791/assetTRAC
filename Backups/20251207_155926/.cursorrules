@@ -1,0 +1,245 @@
+# AssetTRAC Development Rules for Cursor AI
+
+## Project Overview
+AssetTRAC is a Next.js 12.3.0 + TypeScript + Supabase asset management application for SMBs. This is a PRODUCTION-READY application that must remain clean and functional at all times.
+
+## Critical Rules (NEVER BREAK)
+
+### Project Cleanliness Policy
+- ❌ **NEVER** add test files to the project directory
+- ❌ **NEVER** create debug folders or temporary files
+- ❌ **NEVER** add .sql files for testing
+- ❌ **NEVER** add troubleshooting scripts
+- ❌ **NEVER** add sample data files
+- ✅ **ALWAYS** keep the project production-ready
+- ✅ **ALWAYS** delete temporary files immediately after use
+- ✅ **ALWAYS** use Supabase SQL Editor directly for database testing
+
+### Development Process
+1. **Work on ONE issue at a time** (user explicitly requested this)
+2. **Test thoroughly** before moving to next item
+3. **Fix issues one at a time** as they are identified during testing
+4. **Create backups** after major milestones only
+5. **GitHub pushes**: periodic, not per-change
+6. **Focus on productivity** and preventing regression
+
+## Technology Stack
+- **Frontend**: Next.js 12.3.0 with TypeScript
+- **Backend**: Next.js API Routes
+- **Database**: Supabase (PostgreSQL)
+- **Authentication**: Supabase Auth
+- **Email Service**: Brevo integration
+- **Styling**: Tailwind CSS v2.2.19 (compatible with Next.js 12.3.0)
+- **Deployment**: Vercel
+
+## Key Systems
+
+### Session Management
+- Tab-isolated sessions with 30-minute inactivity timeout
+- Custom session validation system
+- Silent redirect to login on timeout
+- Files: `lib/sessionValidator.ts`, `lib/useSessionTimeout.ts`
+
+### Activity Logging
+- Comprehensive event tracking for audit trails
+- Role-based filtering (Admin sees all, others see only their own)
+- Files: `lib/activityLogger.ts`, `pages/api/activity/log/index.ts`
+
+### Real-time Admin Dashboard
+- Event-driven refresh system with custom events
+- 10-second polling backup mechanism
+- Visual indicators (green dot for "Live updates enabled")
+- Files: `lib/adminRefresh.ts`, `pages/admin/dashboard/index.tsx`
+
+### Invitation System
+- Multi-stage approval process: Admin → Owner → Manager → Tech/Viewer
+- Token-based invitation links
+- Real-time status tracking
+- 6 key events: Send → Accept → Company → Approve → Login → Complete
+
+## User Roles & Permissions
+
+### Admin (Global)
+- Full system access across all companies
+- Can invite Owner, Manager, Tech, Viewer roles
+- Manages all companies and users
+- Sees all activity logs
+
+### Owner (Per-Company)
+- Full company access
+- Can invite Manager, Tech, Viewer roles
+- Creates and manages company details
+
+### Manager (Per-Company)
+- Configurable access (Asset, Financials, Both)
+- Can invite Tech, Viewer roles
+- Based on sub-role permissions
+
+### Tech (Per-Company)
+- Asset management only
+- No invitation permissions
+
+### Viewer (Per-Company)
+- Read-only access (Asset, Financials, Both)
+- No invitation permissions
+
+## Current Development Status
+
+### Recently Completed (2025-10-13)
+- Real-time admin dashboard updates with event-driven refresh
+- All 6 invitation flow events now log with proper attribution
+- Removed manual refresh buttons, added visual indicators
+- Implemented polling backup (10-second intervals)
+
+### Currently In Progress
+- Project management systems (backups, session continuity)
+- Invitation flow end-to-end testing
+
+### Next Up
+- Company management page development
+- User management page development
+
+## File Structure
+
+### Core Files
+- `lib/adminRefresh.ts` - Real-time refresh system
+- `lib/activityLogger.ts` - Activity logging utility
+- `lib/supabaseClient.ts` - Database client configuration
+- `pages/admin/dashboard/index.tsx` - Main admin dashboard
+
+### API Endpoints
+- `pages/api/auth/signin/index.ts` - User login with refresh triggers
+- `pages/api/activity/log/index.ts` - Activity logging endpoint
+- `pages/api/admin/approve-user/index.ts` - User approval
+- `pages/api/send-invite-email/index.ts` - Invitation sending
+
+### Invitation Flow
+- `pages/admin/invite/index.tsx` - Send invitations
+- `pages/invite/accept/[token]/index.tsx` - Accept invitations
+- `pages/company/create.tsx` - Company setup
+
+## Development Guidelines
+
+### Code Quality
+- Use TypeScript strictly
+- Follow Next.js 12.3.0 patterns
+- Maintain consistent error handling
+- Use proper Supabase client instances (supabase() vs supabaseAdmin())
+
+### Testing Approach
+- Test one feature at a time
+- User validates each fix before moving on
+- Check browser console for errors
+- Verify real-time updates work
+- Test all user roles and permissions
+
+### Error Handling
+- Always handle Supabase errors gracefully
+- Log errors to console for debugging
+- Provide user-friendly error messages
+- Never expose sensitive information
+
+### Database Operations
+- Use `supabase()` for auth operations
+- Use `supabaseAdmin()` for database operations
+- Always check for errors and handle them
+- Use proper TypeScript types
+
+## Common Issues & Solutions
+
+### Development Server
+```powershell
+# If server won't start
+npm run dev:full
+
+# If port 3000 is busy
+npm run dev:force
+```
+
+### Real-time Updates
+- Check `lib/adminRefresh.ts` for event triggers
+- Verify 500ms delay for database commits
+- Check browser console for errors
+- Polling backup runs every 10 seconds
+
+### Build Errors
+- Clean .next folder: `Remove-Item -Recurse -Force .next`
+- Fix imports: `npm run fix-imports`
+- Restart: `npm run dev:clean`
+
+## User Communication
+
+### What the User Wants
+- **One issue at a time** - Don't try to fix everything at once
+- **Test thoroughly** - Each fix should be validated
+- **Real-time updates** - Admin dashboard should update automatically
+- **Clean project** - No test files or debug folders
+- **Productivity focus** - Prevent going in circles
+
+### User Testing Process
+1. User tests feature
+2. Reports specific issues
+3. We fix one issue at a time
+4. User validates fix
+5. Move to next issue
+
+## Success Criteria
+
+### Invitation Flow Working
+- Admin sends invitation → Recent Activity updates immediately
+- User accepts → Dashboard counters update
+- User creates company → Activity logs
+- Admin approves → Status changes
+- User first login → Invitation disappears
+- User appears in Manage Users
+
+### Real-time Updates Working
+- No manual refresh buttons visible
+- Green dot shows "Live updates enabled"
+- Updates happen within 10 seconds maximum
+- No console errors
+
+## Reference Documents
+
+- `PROJECT_CONTEXT.md` - Complete technical documentation
+- `DEVELOPMENT_PLAN.md` - Current development roadmap
+- `CHANGE_LOG.md` - Recent changes and milestones
+- `SESSION_GUIDE.md` - Quick start for new chat sessions
+- `DEVELOPMENT_SETUP.md` - Development environment setup
+
+## Backup System
+
+### Creating Backups
+```powershell
+.\create-backup.ps1 "Description of milestone"
+```
+
+### Backup Rules
+- Maximum 5 backups retained
+- Automated cleanup of oldest backups
+- Each backup logged in CHANGE_LOG.md
+- Excludes: node_modules, .next, .git, Backups folder
+
+## Environment Variables
+
+Required in `.env.local`:
+```
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+BREVO_API_KEY=your_brevo_api_key
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
+ADMIN_EMAIL=noreply@chrismatt.com
+```
+
+## Final Reminders
+
+1. **This is a production application** - keep it clean and functional
+2. **Work on one issue at a time** - don't try to fix everything at once
+3. **Test thoroughly** - each fix should be validated by the user
+4. **No test files** - use external tools or Supabase SQL Editor
+5. **Focus on productivity** - prevent regression and going in circles
+6. **Real-time updates** - admin dashboard should update automatically
+7. **User validation** - always get user confirmation before moving to next issue
+
+Remember: The user values systematic, focused development over speed. Quality and preventing regression are more important than quick fixes.

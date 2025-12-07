@@ -1,8 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next'
-import { createClient } from '@supabase/supabase-js'
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+import { supabase, supabaseAdmin, supabaseServer, validateJWTToken } from '@/lib/supabaseClient'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -18,17 +15,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const token = authHeader.substring(7)
 
-    // Create Supabase client with service role key for admin operations
-    const supabase = createClient(supabaseUrl, supabaseServiceKey)
-
-    // Verify the user is an admin
-    const { data: { user }, error: userError } = await supabase.auth.getUser(token)
+    // Validate the JWT token and get user data
+    const { user, error: userError } = await validateJWTToken(token)
     if (userError || !user) {
       return res.status(401).json({ error: 'Invalid token' })
     }
 
     // Check if user is admin and get their company ID
-    const { data: companyUsers, error: companyUsersError } = await supabase
+    const { data: companyUsers, error: companyUsersError } = await supabaseAdmin()
       .from('company_users')
       .select('role, company_id')
       .eq('user_id', user.id)
@@ -38,40 +32,88 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(403).json({ error: 'Access denied. Admin role required.' })
     }
 
-    // Get the admin's company ID to exclude it
+    // Get the admin's company ID
     const adminCompanyId = companyUsers[0].company_id
 
-    // Get all companies except the admin's own company
-    const { data: companies, error: companiesError } = await supabase
+    // Get all companies for the count
+    const { data: allCompanies, error: allCompaniesError } = await supabaseAdmin()
       .from('companies')
       .select('*')
-      .neq('id', adminCompanyId)
       .order('created_at', { ascending: false })
 
-    if (companiesError) {
-      console.error('Error fetching companies:', companiesError)
+    if (allCompaniesError) {
+      console.error('Error fetching all companies:', allCompaniesError)
       return res.status(500).json({ error: 'Failed to fetch companies' })
     }
 
-    // Transform the data to include basic company information
-    const companiesWithUsers = companies.map((company) => {
-      return {
-        id: company.id,
-        name: company.name,
-        address: company.street,
-        city: company.city,
-        state: company.state,
-        zip: company.zip,
-        phone: company.phone,
-        email: company.email,
-        description: company.note,
-        created_at: company.created_at,
-        updated_at: company.updated_at,
-        depreciation_rate: company.depreciation_rate
-      }
-    })
+    // Get companies except the admin's own company for the list
+    const companies = allCompanies.filter(company => company.id !== adminCompanyId)
 
-    res.status(200).json({ companies: companiesWithUsers })
+    // Get owner information for each company
+    const companiesWithOwners = await Promise.all(
+      companies.map(async (company) => {
+        // Get the owner of this company
+        const { data: ownerData, error: ownerError } = await supabaseAdmin()
+          .from('company_users')
+          .select('user_id')
+          .eq('company_id', company.id)
+          .eq('role', 'owner')
+          .single()
+
+        let owner: {
+          id: string
+          first_name: string | null
+          last_name: string | null
+          email: string
+          display_name: string
+        } | null = null
+        if (!ownerError && ownerData) {
+          // Get the profile information for the owner
+          const { data: profileData, error: profileError } = await supabaseAdmin()
+            .from('profiles')
+            .select('first_name, last_name, email')
+            .eq('id', ownerData.user_id)
+            .single()
+
+          if (!profileError && profileData) {
+            owner = {
+              id: ownerData.user_id,
+              first_name: profileData.first_name,
+              last_name: profileData.last_name,
+              email: profileData.email,
+              display_name: profileData.last_name && profileData.first_name 
+                ? `${profileData.last_name}, ${profileData.first_name}`
+                : profileData.first_name || profileData.last_name || 'Unknown Owner'
+            }
+          }
+        }
+
+
+
+        return {
+          id: company.id,
+          name: company.name,
+          address: company.street,
+          city: company.city,
+          state: company.state,
+          zip: company.zip,
+          phone: company.phone,
+          email: company.email,
+          description: company.note,
+          created_at: company.created_at,
+          updated_at: company.updated_at,
+          depreciation_rate: company.depreciation_rate,
+          owner: owner
+        }
+      })
+    )
+
+    res.status(200).json({ 
+      companies: companiesWithOwners,
+      companiesCount: companies.length, // Exclude admin's company from count
+      totalCount: companies.length, // Keep both for compatibility
+      adminCompanyId: adminCompanyId
+    })
   } catch (error) {
     console.error('Error in admin companies API:', error)
     res.status(500).json({ error: 'Internal server error' })

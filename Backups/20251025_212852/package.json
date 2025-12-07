@@ -1,0 +1,38 @@
+{
+    "name": "assettrac",
+    "version": "0.1.0",
+    "private": true,
+    "description": "Asset tracking application with admin approval workflow",
+    "scripts": {
+        "dev": "next dev -p 3000",
+        "dev:force": "npx kill-port 3000 && next dev -p 3000",
+        "dev:clean": "node fix-supabase-imports.js && next dev -p 3000",
+        "dev:full": "powershell -ExecutionPolicy Bypass -File start-dev.ps1",
+        "fix-imports": "node fix-supabase-imports.js",
+        "fix-all": "node fix-final.js",
+        "build": "next build",
+        "start": "next start -p 3000",
+        "lint": "next lint"
+    },
+    "dependencies": {
+        "@supabase/supabase-js": "^2.45.0",
+        "@types/uuid": "^10.0.0",
+        "bufferutil": "^4.0.1",
+        "dotenv": "^17.2.2",
+        "next": "^12.3.0",
+        "react": "^18.3.1",
+        "react-dom": "^18.3.1",
+        "utf-8-validate": "^5.0.2",
+        "uuid": "^13.0.0"
+    },
+    "devDependencies": {
+        "@types/react": "^18.3.1",
+        "@types/react-dom": "^18.3.1",
+        "autoprefixer": "^10.4.21",
+        "eslint": "^9.34.0",
+        "eslint-config-next": "^15.5.0",
+        "postcss": "^8.5.6",
+        "tailwindcss": "^2.2.19",
+        "typescript": "^5.4.5"
+    }
+}
