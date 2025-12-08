@@ -1575,7 +1575,7 @@ export default function AssetsPage() {
             })
           }
         } else {
-          if (userAssets.length > 0) {
+          if (userAssets.length > 0 && userContainer.user_id) {
             console.log(`  - Adding user group WITHOUT user info (assets exist but user lookup failed)`)
             userGroups.push({
               user: {
