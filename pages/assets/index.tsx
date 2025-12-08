@@ -50,6 +50,7 @@ interface UserAssetGroup {
     email: string
   }
   assets: Asset[]
+  userContainer?: AssetContainer | null
 }
 
 export default function AssetsPage() {
