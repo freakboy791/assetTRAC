@@ -318,47 +318,52 @@ export default function AssetsPage() {
           if (unassignedContainers.length > 0) {
             defaultContainer = unassignedContainers[0]
             // Ensure the description is set correctly
-            const correctDescription = 'Default container for assets without a specific user'
-            if (!defaultContainer.description || defaultContainer.description !== correctDescription) {
-              const updateResponse = await fetch('/api/assets/containers', {
-                method: 'PUT',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${accessToken}`
-                },
-                body: JSON.stringify({
-                  id: defaultContainer.id,
-                  description: correctDescription
+            if (defaultContainer) {
+              const correctDescription = 'Default container for assets without a specific user'
+              if (!defaultContainer.description || defaultContainer.description !== correctDescription) {
+                const updateResponse = await fetch('/api/assets/containers', {
+                  method: 'PUT',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${accessToken}`
+                  },
+                  body: JSON.stringify({
+                    id: defaultContainer.id,
+                    description: correctDescription
+                  })
                 })
-              })
-              if (updateResponse.ok) {
-                // Update the local container object
-                defaultContainer.description = correctDescription
+                if (updateResponse.ok) {
+                  // Update the local container object
+                  defaultContainer.description = correctDescription
+                }
               }
             }
             // Delete the rest
-            for (let i = 1; i < unassignedContainers.length; i++) {
-              const dup = unassignedContainers[i]
-              // Move assets from duplicate to the first one
-              const assetsResponse = await fetch('/api/assets', {
-                headers: { 'Authorization': `Bearer ${accessToken}` }
-              })
-              if (assetsResponse.ok) {
-                const assetsData = await assetsResponse.json()
-                const assetsToMove = (assetsData.assets || []).filter((asset: Asset) => 
-                  asset.container_id === dup.id
-                )
-                for (const asset of assetsToMove) {
-                  await fetch(`/api/assets/${asset.id}`, {
-                    method: 'PUT',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      'Authorization': `Bearer ${accessToken}`
-                    },
-                    body: JSON.stringify({ container_id: defaultContainer.id })
-                  })
+            if (defaultContainer) {
+              for (let i = 1; i < unassignedContainers.length; i++) {
+                const dup = unassignedContainers[i]
+                // Move assets from duplicate to the first one
+                const assetsResponse = await fetch('/api/assets', {
+                  headers: { 'Authorization': `Bearer ${accessToken}` }
+                })
+                if (assetsResponse.ok) {
+                  const assetsData = await assetsResponse.json()
+                  const assetsToMove = (assetsData.assets || []).filter((asset: Asset) => 
+                    asset.container_id === dup.id
+                  )
+                  for (const asset of assetsToMove) {
+                    await fetch(`/api/assets/${asset.id}`, {
+                      method: 'PUT',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${accessToken}`
+                      },
+                      body: JSON.stringify({ container_id: defaultContainer.id })
+                    })
+                  }
                 }
               }
+            }
               // Delete the duplicate
               await fetch('/api/assets/containers', {
                 method: 'DELETE',
