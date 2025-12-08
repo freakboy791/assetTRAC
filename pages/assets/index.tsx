@@ -2296,7 +2296,7 @@ export default function AssetsPage() {
                                         const totalAssets = directAssets + userGroupAssets
                                         
                                         // Build summary text - always show users and assets counts
-                                        const parts = []
+                                        const parts: string[] = []
                                         // Always show user count (even if 0)
                                         parts.push(`${totalUsers} user${totalUsers !== 1 ? 's' : ''}`)
                                         // Always show asset count (even if 0)
