@@ -362,17 +362,16 @@ export default function AssetsPage() {
                     })
                   }
                 }
+                // Delete the duplicate
+                await fetch('/api/assets/containers', {
+                  method: 'DELETE',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${accessToken}`
+                  },
+                  body: JSON.stringify({ id: dup.id })
+                })
               }
-            }
-              // Delete the duplicate
-              await fetch('/api/assets/containers', {
-                method: 'DELETE',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${accessToken}`
-                },
-                body: JSON.stringify({ id: dup.id })
-              })
             }
             // Reload after cleanup
             const reloadResponse = await fetch('/api/assets/containers', {
