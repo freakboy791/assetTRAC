@@ -62,7 +62,8 @@ export default function ResetPasswordPage() {
         
         if ((finalType === 'recovery' && finalAccessToken) || finalCode) {
           // Store the code or token for later use
-          setToken(finalCode || finalAccessToken)
+          const tokenValue = finalCode || finalAccessToken || ''
+          setToken(tokenValue)
           setIsValidToken(true)
           setMessage('Please enter your new password below.')
         } else {
