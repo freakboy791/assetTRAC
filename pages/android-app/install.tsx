@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 /**
  * Public Android App Installation Page
  * No authentication required - accessible to anyone via URL or QR code
+ * Route: /android-app/install
  */
 export default function AndroidAppInstallPage() {
   const [downloading, setDownloading] = useState(false)
