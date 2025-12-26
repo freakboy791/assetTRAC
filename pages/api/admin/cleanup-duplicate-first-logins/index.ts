@@ -85,7 +85,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const idsToDelete: string[] = []
     const idsToKeep: string[] = []
 
-    for (const [userKey, records] of userGroups.entries()) {
+    // Convert Map entries to array for iteration (compatible with es5 target)
+    for (const [userKey, records] of Array.from(userGroups.entries())) {
       if (records.length > 1) {
         // Sort by created_at (earliest first)
         records.sort((a, b) => 
