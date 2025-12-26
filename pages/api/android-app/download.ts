@@ -7,7 +7,8 @@ import path from 'path'
  * The APK should be placed in the public/android-app/ directory
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'GET') {
+  // Support both GET and HEAD requests (HEAD for checking if file exists)
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
@@ -18,14 +19,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     
     // Check if file exists
     if (!fs.existsSync(apkPath)) {
+      console.log(`APK file not found at: ${apkPath}`)
       return res.status(404).json({ 
         error: 'APK file not found',
-        message: 'The APK file has not been uploaded yet. Please build the Android app and place the APK in public/android-app/assettrac-checkin.apk'
+        message: 'The APK file has not been uploaded yet. Please build the Android app and place the APK in public/android-app/assettrac-checkin.apk',
+        path: apkPath
       })
     }
 
-    // Read the file
-    const fileBuffer = fs.readFileSync(apkPath)
     const fileStats = fs.statSync(apkPath)
 
     // Set headers for file download
@@ -36,7 +37,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Cache headers (optional - adjust as needed)
     res.setHeader('Cache-Control', 'public, max-age=3600')
 
-    // Send the file
+    // For HEAD requests, just return headers without body
+    if (req.method === 'HEAD') {
+      return res.status(200).end()
+    }
+
+    // For GET requests, read and send the file
+    const fileBuffer = fs.readFileSync(apkPath)
     return res.status(200).send(fileBuffer)
   } catch (error: any) {
     console.error('Error serving APK file:', error)

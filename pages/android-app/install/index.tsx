@@ -25,6 +25,16 @@ export default function AndroidAppInstallPage() {
       // Get the APK file URL
       const apkUrl = '/api/android-app/download'
       
+      // First, check if the file exists by making a HEAD request
+      const checkResponse = await fetch(apkUrl, { method: 'HEAD' })
+      
+      if (!checkResponse.ok) {
+        const errorData = await checkResponse.json().catch(() => ({ message: 'APK file not available' }))
+        alert(`APK file not available: ${errorData.message || 'The Android app has not been built yet. Please contact your administrator.'}`)
+        setDownloading(false)
+        return
+      }
+      
       // Create a temporary anchor element to trigger download
       const link = document.createElement('a')
       link.href = apkUrl
@@ -40,7 +50,7 @@ export default function AndroidAppInstallPage() {
       setDownloading(false)
     } catch (error) {
       console.error('Error downloading APK:', error)
-      alert('Failed to download APK. Please try again.')
+      alert('Failed to download APK. The APK file may not be available yet. Please contact your administrator.')
       setDownloading(false)
     }
   }
