@@ -415,13 +415,12 @@ export default function AndroidAppDownloadPage() {
       </main>
 
       {/* Session Timeout Warning */}
-      {showWarning && (
-        <SessionTimeoutWarning
-          timeRemaining={timeRemainingFormatted}
-          onExtend={extendSession}
-          onDismiss={dismissWarning}
-        />
-      )}
+      <SessionTimeoutWarning
+        show={showWarning}
+        timeRemaining={timeRemainingFormatted}
+        onExtend={extendSession}
+        onDismiss={dismissWarning}
+      />
     </div>
   )
 }
