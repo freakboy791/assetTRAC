@@ -782,8 +782,8 @@ export default function DashboardPage() {
               </div>
             )}
 
-            {/* Android App Download - All users with company access */}
-            {hasCompany && (
+            {/* Android App Download - Users with asset access */}
+            {hasAssetManagementAccess() && (
               <div className="bg-white overflow-hidden shadow rounded-lg">
                 <div className="p-6">
                   <div className="flex items-center">
