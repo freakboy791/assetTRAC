@@ -120,20 +120,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     isTech = roles.includes('tech')
 
     if (isAdmin) {
-
-      
       // Even admin users need profile data for display names
       const { data: profile, error: profileError } = await supabaseAdmin()
         .from('profiles')
-        .select('first_name, last_name, last_login_at')
+        .select('first_name, last_name, middle_initial, last_login_at')
         .eq('id', user.id)
         .single()
 
       if (profileError) {
-
-        // Return admin user without profile data if profile doesn't exist
+        console.log('getUser API: Admin profile not found or error:', profileError.message)
+        // Return admin user with null profile fields if profile doesn't exist
         return res.status(200).json({ 
-          user: user, 
+          user: {
+            ...user,
+            first_name: null,
+            last_name: null,
+            middle_initial: null,
+            last_login_at: null
+          }, 
           isApproved: true,
           isAdmin: true,
           isOwner: false,
@@ -142,16 +146,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         })
       }
 
-
-
-
-      
+      // Return admin user with profile data from profiles table
       return res.status(200).json({ 
         user: {
           ...user,
-          first_name: profile.first_name,
-          last_name: profile.last_name,
-          last_login_at: profile.last_login_at
+          first_name: profile?.first_name || null,
+          last_name: profile?.last_name || null,
+          middle_initial: profile?.middle_initial || null,
+          last_login_at: profile?.last_login_at || null
         }, 
         isApproved: true,
         isAdmin: true,
@@ -164,7 +166,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // For non-admin users, check if they are approved and get profile data
     const { data: profile, error: profileError } = await supabaseAdmin()
       .from('profiles')
-      .select('is_approved, first_name, last_name, last_login_at')
+      .select('is_approved, first_name, last_name, middle_initial, last_login_at')
       .eq('id', user.id)
       .single()
 
@@ -182,12 +184,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
 
 
+    // Return user with profile data from profiles table
     return res.status(200).json({ 
       user: {
         ...user,
-        first_name: profile.first_name,
-        last_name: profile.last_name,
-        last_login_at: profile.last_login_at
+        first_name: profile?.first_name || null,
+        last_name: profile?.last_name || null,
+        middle_initial: profile?.middle_initial || null,
+        last_login_at: profile?.last_login_at || null
       }, 
       isApproved: profile.is_approved === true,
       isAdmin: false,

@@ -123,11 +123,15 @@ export function useSessionTimeout(options: UseSessionTimeoutOptions = {}) {
     resetTimeout()
   }, [resetTimeout])
 
+  // Only show warning if time remaining is actually in the warning period
+  // This prevents the warning from showing too early
+  const actualShowWarning = showWarning && timeRemaining > 0 && timeRemaining <= (warningMinutes * 60 * 1000)
+
   return {
     timeRemaining,
     warningTimeRemaining,
     isExpiringSoon,
-    showWarning,
+    showWarning: actualShowWarning,
     resetTimeout,
     dismissWarning,
     extendSession,

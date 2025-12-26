@@ -93,8 +93,30 @@ export default function FinancialsPage() {
         }
         
         if (validatedSession) {
-          setUser(validatedSession.user)
-          setUserRoles(validatedSession.userData.roles || [])
+          try {
+            const response = await fetch('/api/auth/getUser', {
+              headers: {
+                'Authorization': `Bearer ${validatedSession.accessToken}`
+              }
+            })
+            
+            if (response.ok) {
+              const data = await response.json()
+              // Always use the user data from API which includes profile data (first_name, last_name)
+              setUser(data.user)
+              setUserRoles(data.roles || [])
+            } else {
+              // Fallback to session data if API fails
+              setUser(validatedSession.user)
+              setUserRoles(validatedSession.userData.roles || [])
+            }
+          } catch (error) {
+            console.error('Error fetching user data:', error)
+            // Fallback to session data
+            setUser(validatedSession.user)
+            setUserRoles(validatedSession.userData.roles || [])
+          }
+          
           setLoading(false)
           
           const { success: activitySuccess, error: activityError } = await updateActivityWithRefresh(tabId)
@@ -231,19 +253,44 @@ export default function FinancialsPage() {
     const filtered = depreciationData.filter(item => {
       if (filterType && item.asset.type !== filterType) return false
       if (filterContainer && item.asset.container_id !== filterContainer) return false
-      if (filterDateFrom && item.purchaseDate) {
-        const fromDate = new Date(filterDateFrom)
-        fromDate.setHours(0, 0, 0, 0)
+      
+      // Date filtering: normalize all dates to local midnight for consistent comparison
+      if ((filterDateFrom || filterDateTo) && item.purchaseDate) {
+        // Normalize purchase date to local midnight
         const purchaseDate = new Date(item.purchaseDate)
-        purchaseDate.setHours(0, 0, 0, 0)
-        if (purchaseDate < fromDate) return false
-      }
-      if (filterDateTo && item.purchaseDate) {
-        const toDate = new Date(filterDateTo)
-        toDate.setHours(23, 59, 59, 999)
-        const purchaseDate = new Date(item.purchaseDate)
-        purchaseDate.setHours(0, 0, 0, 0)
-        if (purchaseDate > toDate) return false
+        const purchaseDateNormalized = new Date(purchaseDate.getFullYear(), purchaseDate.getMonth(), purchaseDate.getDate())
+        
+        if (filterDateFrom) {
+          // Parse filter date from YYYY-MM-DD format (date input format)
+          // This avoids timezone issues when parsing date strings
+          const fromParts = filterDateFrom.split('-')
+          if (fromParts.length === 3) {
+            const fromYear = parseInt(fromParts[0], 10)
+            const fromMonth = parseInt(fromParts[1], 10) - 1 // Month is 0-indexed
+            const fromDay = parseInt(fromParts[2], 10)
+            const fromDateNormalized = new Date(fromYear, fromMonth, fromDay)
+            // Purchase date should be >= fromDate (inclusive)
+            if (purchaseDateNormalized.getTime() < fromDateNormalized.getTime()) {
+              return false
+            }
+          }
+        }
+        
+        if (filterDateTo) {
+          // Parse filter date from YYYY-MM-DD format (date input format)
+          // This avoids timezone issues when parsing date strings
+          const toParts = filterDateTo.split('-')
+          if (toParts.length === 3) {
+            const toYear = parseInt(toParts[0], 10)
+            const toMonth = parseInt(toParts[1], 10) - 1 // Month is 0-indexed
+            const toDay = parseInt(toParts[2], 10)
+            const toDateNormalized = new Date(toYear, toMonth, toDay)
+            // Purchase date should be <= toDate (inclusive)
+            if (purchaseDateNormalized.getTime() > toDateNormalized.getTime()) {
+              return false
+            }
+          }
+        }
       }
       return true
     })
@@ -451,7 +498,7 @@ export default function FinancialsPage() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-[95%] 2xl:max-w-[98%] mx-auto px-2 sm:px-4 lg:px-6 xl:px-8">
           {/* Mobile Layout */}
           <div className="block sm:hidden py-4">
             <div className="flex justify-between items-center mb-3">
@@ -461,24 +508,24 @@ export default function FinancialsPage() {
                 </div>
                 <h1 className="text-lg font-bold text-gray-900">assetTRAC</h1>
               </div>
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={() => window.location.href = '/dashboard'}
-                  className="bg-gray-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors"
-                >
-                  Back
-                </button>
+              <div className="flex flex-col items-end space-y-2">
                 <button
                   onClick={() => window.location.href = '/profile'}
-                  className="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+                  className="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors"
                 >
                   Profile
                 </button>
                 <button
                   onClick={handleSignOut}
-                  className="bg-red-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
+                  className="bg-red-600 text-white px-4 py-2 rounded-md text-sm hover:bg-red-700 transition-colors"
                 >
                   Sign Out
+                </button>
+                <button
+                  onClick={() => window.location.href = '/dashboard'}
+                  className="bg-gray-600 text-white px-3 py-1.5 rounded-md text-xs hover:bg-gray-700 transition-colors"
+                >
+                  Back
                 </button>
               </div>
             </div>
@@ -529,9 +576,7 @@ export default function FinancialsPage() {
             </div>
             <div className="flex items-center space-x-4">
               <div className="flex flex-col items-end">
-                <span className="text-sm text-gray-700">
-                  Welcome, {getDisplayName()}
-                </span>
+                <span className="text-sm text-gray-700">Welcome, {getDisplayName()}</span>
                 {userRoles.length > 0 && (
                   <div className="flex items-center space-x-2 mt-1">
                     <span className="text-xs text-gray-500">Role:</span>
@@ -565,19 +610,19 @@ export default function FinancialsPage() {
               </div>
               <button
                 onClick={() => window.location.href = '/profile'}
-                className="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+                className="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors"
               >
                 Profile
               </button>
               <button
                 onClick={() => window.location.href = '/dashboard'}
-                className="bg-gray-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors"
+                className="bg-gray-600 text-white px-4 py-2 rounded-md text-sm hover:bg-gray-700 transition-colors"
               >
                 Back
               </button>
               <button
                 onClick={handleSignOut}
-                className="bg-red-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
+                className="bg-red-600 text-white px-4 py-2 rounded-md text-sm hover:bg-red-700 transition-colors"
               >
                 Sign Out
               </button>
@@ -588,7 +633,7 @@ export default function FinancialsPage() {
 
       {/* Breadcrumbs */}
       <div className="fixed top-28 sm:top-24 left-0 right-0 z-40 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
+        <div className="max-w-[95%] 2xl:max-w-[98%] mx-auto px-2 sm:px-4 lg:px-6 xl:px-8 py-2">
           <nav className="flex" aria-label="Breadcrumb">
             <ol className="flex items-center space-x-4">
               <li>
@@ -616,8 +661,8 @@ export default function FinancialsPage() {
       </div>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8 pt-44 sm:pt-36">
-        <div className="px-4 py-6 sm:px-0">
+      <main className="max-w-[95%] 2xl:max-w-[98%] mx-auto py-6 sm:px-4 lg:px-6 xl:px-8 pt-44 sm:pt-36">
+        <div className="px-2 sm:px-4 py-6">
           <div className="mb-6 sm:mb-8">
             <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">Financials - Asset Depreciation</h2>
             <p className="mt-2 text-sm sm:text-base text-gray-600">Straight-line depreciation analysis for all company assets</p>
@@ -786,55 +831,55 @@ export default function FinancialsPage() {
               {/* Desktop Table View */}
               <div className="hidden lg:block bg-white shadow rounded-lg overflow-hidden">
                 <div className="overflow-x-auto">
-                  <table className="w-full divide-y divide-gray-200">
+                  <table className="w-full divide-y divide-gray-200 min-w-full">
                     <thead className="bg-gray-50">
                       <tr>
                         <th
-                          className="px-4 xl:px-8 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 min-w-[180px]"
+                          className="px-3 xl:px-4 2xl:px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 min-w-[160px]"
                           onClick={() => handleSort('name')}
                         >
                           Asset Name {getSortIcon('name')}
                         </th>
                         <th
-                          className="px-4 xl:px-8 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 min-w-[120px]"
+                          className="px-3 xl:px-4 2xl:px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 min-w-[100px]"
                           onClick={() => handleSort('type')}
                         >
                           Type {getSortIcon('type')}
                         </th>
                         <th
-                          className="px-4 xl:px-8 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 min-w-[140px]"
+                          className="px-3 xl:px-4 2xl:px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 min-w-[120px]"
                           onClick={() => handleSort('purchaseDate')}
                         >
                           Purchase Date {getSortIcon('purchaseDate')}
                         </th>
                         <th
-                          className="px-4 xl:px-8 py-4 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 min-w-[120px]"
+                          className="px-3 xl:px-4 2xl:px-6 py-4 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 min-w-[100px]"
                           onClick={() => handleSort('cost')}
                         >
                           Cost {getSortIcon('cost')}
                         </th>
-                        <th className="px-4 xl:px-8 py-4 text-right text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[160px]">
+                        <th className="px-3 xl:px-4 2xl:px-6 py-4 text-right text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[140px]">
                           Annual Depreciation
                         </th>
-                        <th className="px-4 xl:px-8 py-4 text-right text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[140px]">
+                        <th className="px-3 xl:px-4 2xl:px-6 py-4 text-right text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">
                           Years Depreciated
                         </th>
                         <th
-                          className="px-4 xl:px-8 py-4 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 min-w-[150px]"
+                          className="px-3 xl:px-4 2xl:px-6 py-4 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 min-w-[130px]"
                           onClick={() => handleSort('totalDepreciation')}
                         >
                           Total Depreciation {getSortIcon('totalDepreciation')}
                         </th>
                         <th
-                          className="px-4 xl:px-8 py-4 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 min-w-[150px]"
+                          className="px-3 xl:px-4 2xl:px-6 py-4 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 min-w-[130px]"
                           onClick={() => handleSort('bookValue')}
                         >
                           Current Book Value {getSortIcon('bookValue')}
                         </th>
-                        <th className="px-4 xl:px-8 py-4 text-right text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[130px]">
+                        <th className="px-3 xl:px-4 2xl:px-6 py-4 text-right text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[110px]">
                           Years Remaining
                         </th>
-                        <th className="px-4 xl:px-8 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">
+                        <th className="px-3 xl:px-4 2xl:px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[130px]">
                           Container
                         </th>
                       </tr>
@@ -842,34 +887,34 @@ export default function FinancialsPage() {
                     <tbody className="bg-white divide-y divide-gray-200">
                       {sortedData.map((item) => (
                         <tr key={item.asset.id} className="hover:bg-gray-50">
-                          <td className="px-4 xl:px-8 py-4 text-sm font-medium text-gray-900">
+                          <td className="px-3 xl:px-4 2xl:px-6 py-4 text-sm font-medium text-gray-900">
                             {item.asset.name}
                           </td>
-                          <td className="px-4 xl:px-8 py-4 text-sm text-gray-500">
+                          <td className="px-3 xl:px-4 2xl:px-6 py-4 text-sm text-gray-500">
                             {item.asset.type || 'N/A'}
                           </td>
-                          <td className="px-4 xl:px-8 py-4 text-sm text-gray-500">
+                          <td className="px-3 xl:px-4 2xl:px-6 py-4 text-sm text-gray-500">
                             {formatDate(item.purchaseDate)}
                           </td>
-                          <td className="px-4 xl:px-8 py-4 text-sm text-gray-900 text-right">
+                          <td className="px-3 xl:px-4 2xl:px-6 py-4 text-sm text-gray-900 text-right">
                             {formatCurrency(item.assetCost)}
                           </td>
-                          <td className="px-4 xl:px-8 py-4 text-sm text-gray-900 text-right">
+                          <td className="px-3 xl:px-4 2xl:px-6 py-4 text-sm text-gray-900 text-right">
                             {formatCurrency(item.annualDepreciation)}
                           </td>
-                          <td className="px-4 xl:px-8 py-4 text-sm text-gray-500 text-right">
+                          <td className="px-3 xl:px-4 2xl:px-6 py-4 text-sm text-gray-500 text-right">
                             {item.yearsDepreciated.toFixed(2)}
                           </td>
-                          <td className="px-4 xl:px-8 py-4 text-sm text-gray-900 text-right">
+                          <td className="px-3 xl:px-4 2xl:px-6 py-4 text-sm text-gray-900 text-right">
                             {formatCurrency(item.totalDepreciation)}
                           </td>
-                          <td className="px-4 xl:px-8 py-4 text-sm font-medium text-indigo-600 text-right">
+                          <td className="px-3 xl:px-4 2xl:px-6 py-4 text-sm font-medium text-indigo-600 text-right">
                             {formatCurrency(item.currentBookValue)}
                           </td>
-                          <td className="px-4 xl:px-8 py-4 text-sm text-gray-500 text-right">
+                          <td className="px-3 xl:px-4 2xl:px-6 py-4 text-sm text-gray-500 text-right">
                             {item.yearsRemaining.toFixed(2)}
                           </td>
-                          <td className="px-4 xl:px-8 py-4 text-sm text-gray-500">
+                          <td className="px-3 xl:px-4 2xl:px-6 py-4 text-sm text-gray-500">
                             {item.container?.name || 'Unassigned'}
                           </td>
                         </tr>
@@ -877,17 +922,17 @@ export default function FinancialsPage() {
                     </tbody>
                     <tfoot className="bg-gray-50 border-t-2 border-gray-300">
                       <tr>
-                        <td colSpan={3} className="px-4 xl:px-8 py-4 text-sm font-bold text-gray-900">
+                        <td colSpan={3} className="px-3 xl:px-4 2xl:px-6 py-4 text-sm font-bold text-gray-900">
                           Totals ({summary.count} assets)
                         </td>
-                        <td className="px-4 xl:px-8 py-4 text-sm font-bold text-gray-900 text-right">
+                        <td className="px-3 xl:px-4 2xl:px-6 py-4 text-sm font-bold text-gray-900 text-right">
                           {formatCurrency(summary.totalCost)}
                         </td>
                         <td colSpan={2}></td>
-                        <td className="px-4 xl:px-8 py-4 text-sm font-bold text-gray-900 text-right">
+                        <td className="px-3 xl:px-4 2xl:px-6 py-4 text-sm font-bold text-gray-900 text-right">
                           {formatCurrency(summary.totalDepreciation)}
                         </td>
-                        <td className="px-4 xl:px-8 py-4 text-sm font-bold text-indigo-600 text-right">
+                        <td className="px-3 xl:px-4 2xl:px-6 py-4 text-sm font-bold text-indigo-600 text-right">
                           {formatCurrency(summary.totalBookValue)}
                         </td>
                         <td colSpan={2}></td>

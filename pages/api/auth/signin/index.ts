@@ -203,56 +203,86 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             .single()
           
           const lastLoginAt = userProfile?.last_login_at
-          const isFirstLogin = !lastLoginAt || (new Date().getTime() - new Date(lastLoginAt).getTime()) > 24 * 60 * 60 * 1000
+          // Only log first login if last_login_at is null (true first login)
+          // Also check if USER_FIRST_LOGIN activity already exists for this user
+          const isFirstLogin = !lastLoginAt
           
           if (isFirstLogin) {
-            // Get admin email who created the invitation
-            const { data: adminProfile } = await supabaseAdmin()
-              .from('profiles')
-              .select('email')
-              .eq('id', invitation.created_by)
-              .single()
+            // Check if USER_FIRST_LOGIN activity already exists for this user
+            // Check by user_email first (most common case)
+            const { data: existingByEmail } = await supabaseAdmin()
+              .from('activity_logs')
+              .select('id')
+              .eq('action', 'USER_FIRST_LOGIN')
+              .eq('user_email', email)
+              .limit(1)
             
-            const adminEmail = adminProfile?.email || 'unknown@admin.com'
-
-            const firstLoginResponse = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/activity/log`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                user_id: invitation.created_by, // Admin who sent invitation
-                user_email: adminEmail, // Admin's email
-                company_id: invitation.company_id, // Admin's company
-                action: 'USER_FIRST_LOGIN',
-                description: `User ${email} logged in successfully for the first time (${invitation.role})`,
-                metadata: {
-                  invited_user_email: email,
-                  invited_user_id: data.user.id,
-                  invitation_id: invitation.id,
-                  company_name: invitation.company_name,
-                  user_role: invitation.role,
-                  admin_who_approved: adminEmail,
-                  admin_user_id: invitation.created_by
-                }
-              })
-            })
-          
-            if (firstLoginResponse.ok) {
-              // Trigger admin dashboard refresh for first login
-              try {
-                triggerUserRefresh.firstLogin()
-              } catch (refreshError) {
-                console.error('Signin API: Error triggering admin refresh:', refreshError)
-              }
+            // Also check metadata for invited_user_email or invited_user_id
+            const { data: existingByMetadata } = await supabaseAdmin()
+              .from('activity_logs')
+              .select('id, metadata')
+              .eq('action', 'USER_FIRST_LOGIN')
+              .limit(100) // Get recent first logins to check metadata
+            
+            const existingInMetadata = existingByMetadata?.some((log: any) => 
+              log.metadata?.invited_user_email === email || 
+              log.metadata?.invited_user_id === data.user.id
+            )
+            
+            const hasExistingFirstLogin = (existingByEmail && existingByEmail.length > 0) || existingInMetadata
+            
+            // Only log if no existing first login activity found
+            if (!hasExistingFirstLogin) {
+              // Get admin email who created the invitation
+              const { data: adminProfile } = await supabaseAdmin()
+                .from('profiles')
+                .select('email')
+                .eq('id', invitation.created_by)
+                .single()
               
-              // Add a small delay to ensure activity logging completes before API returns
-              await new Promise(resolve => setTimeout(resolve, 500))
+              const adminEmail = adminProfile?.email || 'unknown@admin.com'
+
+              const firstLoginResponse = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/activity/log`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  user_id: invitation.created_by, // Admin who sent invitation
+                  user_email: adminEmail, // Admin's email
+                  company_id: invitation.company_id, // Admin's company
+                  action: 'USER_FIRST_LOGIN',
+                  description: `User ${email} logged in successfully for the first time (${invitation.role})`,
+                  metadata: {
+                    invited_user_email: email,
+                    invited_user_id: data.user.id,
+                    invitation_id: invitation.id,
+                    company_name: invitation.company_name,
+                    user_role: invitation.role,
+                    admin_who_approved: adminEmail,
+                    admin_user_id: invitation.created_by
+                  }
+                })
+              })
+            
+              if (firstLoginResponse.ok) {
+                // Trigger admin dashboard refresh for first login
+                try {
+                  triggerUserRefresh.firstLogin()
+                } catch (refreshError) {
+                  console.error('Signin API: Error triggering admin refresh:', refreshError)
+                }
+                
+                // Add a small delay to ensure activity logging completes before API returns
+                await new Promise(resolve => setTimeout(resolve, 500))
+              } else {
+                console.error('Signin API: Failed to log first login activity:', firstLoginResponse.status, await firstLoginResponse.text())
+              }
             } else {
-              console.error('Signin API: Failed to log first login activity:', firstLoginResponse.status, await firstLoginResponse.text())
+              console.log('Signin API: First login activity already exists for this user, skipping')
             }
           } else {
-            console.log('Signin API: Not a first login, skipping activity logging')
+            console.log('Signin API: Not a first login (last_login_at exists), skipping activity logging')
           }
         } catch (logError) {
           console.error('Signin API: Error checking/logging first login activity:', logError)

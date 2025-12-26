@@ -21,6 +21,7 @@ interface Asset {
   container_id: string | null
   assigned_to: string | null
   company_id: string
+  last_check_in: string | null
   created_at: string
   updated_at: string
 }
@@ -1776,6 +1777,44 @@ export default function AssetsPage() {
     }).format(amount)
   }
 
+  const formatCheckInStatus = (lastCheckIn: string | null) => {
+    if (!lastCheckIn) {
+      return { text: 'Never', color: 'bg-gray-100 text-gray-800', timeAgo: 'No check-in recorded' }
+    }
+    
+    try {
+      const checkInDate = new Date(lastCheckIn)
+      const now = new Date()
+      const diffMs = now.getTime() - checkInDate.getTime()
+      const diffMinutes = Math.floor(diffMs / (1000 * 60))
+      const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+      
+      let timeAgo = ''
+      if (diffMinutes < 60) {
+        timeAgo = `${diffMinutes}m ago`
+      } else if (diffHours < 24) {
+        timeAgo = `${diffHours}h ago`
+      } else {
+        timeAgo = `${diffDays}d ago`
+      }
+      
+      // Color coding: Green (< 1 hour), Yellow (1-24 hours), Red (> 24 hours)
+      let color = 'bg-gray-100 text-gray-800'
+      if (diffMinutes < 60) {
+        color = 'bg-green-100 text-green-800'
+      } else if (diffHours < 24) {
+        color = 'bg-yellow-100 text-yellow-800'
+      } else {
+        color = 'bg-red-100 text-red-800'
+      }
+      
+      return { text: timeAgo, color, timeAgo: `Last check-in: ${timeAgo}` }
+    } catch {
+      return { text: 'Invalid', color: 'bg-gray-100 text-gray-800', timeAgo: 'Invalid date' }
+    }
+  }
+
   const getDisplayName = () => {
     return getUserDisplayName(user)
   }
@@ -1798,7 +1837,7 @@ export default function AssetsPage() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-[95%] 2xl:max-w-[98%] mx-auto px-2 sm:px-4 lg:px-6 xl:px-8">
           <div className="block sm:hidden py-4">
             <div className="flex justify-between items-center mb-3">
               <div className="flex items-center">
@@ -1939,7 +1978,7 @@ export default function AssetsPage() {
 
       {/* Breadcrumbs */}
       <div className="fixed top-28 sm:top-24 left-0 right-0 z-40 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
+        <div className="max-w-[95%] 2xl:max-w-[98%] mx-auto px-2 sm:px-4 lg:px-6 xl:px-8 py-2">
           <nav className="flex" aria-label="Breadcrumb">
             <ol className="flex items-center space-x-4">
               <li>
@@ -1967,10 +2006,10 @@ export default function AssetsPage() {
       </div>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8 pt-40 sm:pt-36">
-        <div className="px-4 py-6 sm:px-0">
+      <main className="max-w-[95%] 2xl:max-w-[98%] mx-auto py-6 sm:px-4 lg:px-6 xl:px-8 pt-40 sm:pt-36">
+        <div className="px-2 sm:px-4 py-6">
           <div className="bg-white shadow rounded-lg">
-            <div className="px-6 py-4 border-b border-gray-200">
+            <div className="px-4 sm:px-5 lg:px-6 py-4 border-b border-gray-200">
               <div className="flex justify-between items-center mb-4">
                 <div>
                   <h2 className="text-2xl font-bold text-gray-900">Asset Management</h2>
@@ -2128,7 +2167,7 @@ export default function AssetsPage() {
 
             {/* Create Container Form */}
             {showCreateContainer && !isViewer && (
-              <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+              <div className="px-4 sm:px-5 lg:px-6 py-4 border-b border-gray-200 bg-gray-50">
                 <h3 className="text-lg font-medium text-gray-900 mb-4">Create New Container</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -2206,7 +2245,7 @@ export default function AssetsPage() {
               </div>
             )}
 
-            <div className="px-6 py-4">
+            <div className="px-4 sm:px-5 lg:px-6 py-4">
               {containerGroups.length === 0 ? (
                 <p className="text-gray-500">No assets found. Create containers to organize your assets.</p>
               ) : (
@@ -2219,7 +2258,7 @@ export default function AssetsPage() {
                     return (
                       <div key={containerId} className="border border-gray-200 rounded-lg overflow-hidden">
                         {/* Container Header */}
-                        <div className="bg-gray-50 px-6 py-4">
+                        <div className="bg-gray-50 px-4 sm:px-5 lg:px-6 py-4">
                           {editingContainer === containerId ? (
                             // Edit Mode
                             <div className="space-y-3">
@@ -2461,6 +2500,7 @@ export default function AssetsPage() {
                                                 <th className="px-2 sm:px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Date</th>
                                                 <th className="px-2 sm:px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20">Cost</th>
                                                 <th className="px-2 sm:px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20">Status</th>
+                                                <th className="px-2 sm:px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Last Check-in</th>
                                                 <th className="px-2 sm:px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">Assigned To</th>
                                                 {!isViewer && (
                                                   <th className="px-2 sm:px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20">Actions</th>
@@ -2499,6 +2539,19 @@ export default function AssetsPage() {
                                                     }`}>
                                                       {asset.status || 'active'}
                                                     </span>
+                                                  </td>
+                                                  <td className="px-2 sm:px-3 py-2 text-sm">
+                                                    {(() => {
+                                                      const checkInStatus = formatCheckInStatus(asset.last_check_in)
+                                                      return (
+                                                        <span 
+                                                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${checkInStatus.color}`}
+                                                          title={checkInStatus.timeAgo}
+                                                        >
+                                                          {checkInStatus.text}
+                                                        </span>
+                                                      )
+                                                    })()}
                                                   </td>
                                                   <td className="px-2 sm:px-3 py-2 text-sm">
                                                     {!isViewer ? (
@@ -2559,6 +2612,7 @@ export default function AssetsPage() {
                                       <th className="px-2 sm:px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Date</th>
                                       <th className="px-2 sm:px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20">Cost</th>
                                       <th className="px-2 sm:px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20">Status</th>
+                                      <th className="px-2 sm:px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Last Check-in</th>
                                       <th className="px-2 sm:px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">Assigned To</th>
                                       {!isViewer && (
                                         <th className="px-2 sm:px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20">Actions</th>
@@ -2597,6 +2651,19 @@ export default function AssetsPage() {
                                           }`}>
                                             {asset.status || 'active'}
                                           </span>
+                                        </td>
+                                        <td className="px-2 sm:px-3 py-2 text-sm">
+                                          {(() => {
+                                            const checkInStatus = formatCheckInStatus(asset.last_check_in)
+                                            return (
+                                              <span 
+                                                className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${checkInStatus.color}`}
+                                                title={checkInStatus.timeAgo}
+                                              >
+                                                {checkInStatus.text}
+                                              </span>
+                                            )
+                                          })()}
                                         </td>
                                         <td className="px-2 sm:px-3 py-2 text-sm">
                                           {!isViewer ? (

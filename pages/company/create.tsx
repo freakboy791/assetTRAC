@@ -751,7 +751,7 @@ export default function CreateCompanyPage() {
             </div>
             <div className="flex items-center space-x-4">
               <div className="flex flex-col items-end">
-              <span className="text-sm text-gray-700">Welcome, {user?.email}</span>
+              <span className="text-sm text-gray-700">Welcome, {getDisplayName()}</span>
                 {userRoles.length > 0 && (
                   <div className="flex items-center space-x-2 mt-1">
                     <span className="text-xs text-gray-500">Role:</span>

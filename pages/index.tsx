@@ -400,31 +400,55 @@ export default function HomePage() {
                   const profileData = await profileResponse.json()
                   const lastLoginAt = profileData.user?.last_login_at
                   
-                  // Only log first login if last_login_at is null or very old (more than 1 day)
-                  const isFirstLogin = !lastLoginAt || (new Date().getTime() - new Date(lastLoginAt).getTime()) > 24 * 60 * 60 * 1000
+                  // Only log first login if last_login_at is null (true first login)
+                  const isFirstLogin = !lastLoginAt
                   
                   if (isFirstLogin) {
-                    const activityResponse = await fetch('/api/activity/log', {
-                      method: 'POST',
+                    // Check if USER_FIRST_LOGIN activity already exists for this user
+                    const checkResponse = await fetch(`/api/activity/log?user_email=${encodeURIComponent(trimmedEmail)}&limit=100`, {
+                      method: 'GET',
                       headers: {
                         'Authorization': `Bearer ${data.session.access_token}`,
                         'Content-Type': 'application/json'
-                      },
-                      body: JSON.stringify({
-                        action: 'USER_FIRST_LOGIN',
-                        description: `User ${trimmedEmail} logged in successfully for the first time`,
-                        user_email: trimmedEmail,
-                        user_id: data.user.id
-                      })
+                      }
                     })
                     
-                    if (activityResponse.ok) {
-                      console.log('Index: First login activity logged successfully')
-                    } else {
-                      console.error('Index: Failed to log first login activity')
+                    let shouldLog = true
+                    if (checkResponse.ok) {
+                      const checkData = await checkResponse.json()
+                      const existingFirstLogin = checkData.activities?.find((a: any) => 
+                        a.action === 'USER_FIRST_LOGIN' && 
+                        (a.user_email === trimmedEmail || a.metadata?.invited_user_email === trimmedEmail || a.metadata?.invited_user_id === data.user.id)
+                      )
+                      if (existingFirstLogin) {
+                        shouldLog = false
+                        console.log('Index: First login activity already exists for this user, skipping')
+                      }
+                    }
+                    
+                    if (shouldLog) {
+                      const activityResponse = await fetch('/api/activity/log', {
+                        method: 'POST',
+                        headers: {
+                          'Authorization': `Bearer ${data.session.access_token}`,
+                          'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                          action: 'USER_FIRST_LOGIN',
+                          description: `User ${trimmedEmail} logged in successfully for the first time`,
+                          user_email: trimmedEmail,
+                          user_id: data.user.id
+                        })
+                      })
+                      
+                      if (activityResponse.ok) {
+                        console.log('Index: First login activity logged successfully')
+                      } else {
+                        console.error('Index: Failed to log first login activity')
+                      }
                     }
                   } else {
-                    console.log('Index: Not a first login, skipping activity logging')
+                    console.log('Index: Not a first login (last_login_at exists), skipping activity logging')
                   }
                 } else {
                   console.error('Index: Failed to get user profile for first login check')
@@ -546,31 +570,55 @@ export default function HomePage() {
                   const profileData = await profileResponse.json()
                   const lastLoginAt = profileData.user?.last_login_at
                   
-                  // Only log first login if last_login_at is null or very old (more than 1 day)
-                  const isFirstLogin = !lastLoginAt || (new Date().getTime() - new Date(lastLoginAt).getTime()) > 24 * 60 * 60 * 1000
+                  // Only log first login if last_login_at is null (true first login)
+                  const isFirstLogin = !lastLoginAt
                   
                   if (isFirstLogin) {
-                    const activityResponse = await fetch('/api/activity/log', {
-                      method: 'POST',
+                    // Check if USER_FIRST_LOGIN activity already exists for this user
+                    const checkResponse = await fetch(`/api/activity/log?user_email=${encodeURIComponent(trimmedEmail)}&limit=100`, {
+                      method: 'GET',
                       headers: {
                         'Authorization': `Bearer ${data.session.access_token}`,
                         'Content-Type': 'application/json'
-                      },
-                      body: JSON.stringify({
-                        action: 'USER_FIRST_LOGIN',
-                        description: `User ${trimmedEmail} logged in successfully for the first time`,
-                        user_email: trimmedEmail,
-                        user_id: data.user.id
-                      })
+                      }
                     })
                     
-                    if (activityResponse.ok) {
-                      console.log('Index: First login activity logged successfully')
-                    } else {
-                      console.error('Index: Failed to log first login activity')
+                    let shouldLog = true
+                    if (checkResponse.ok) {
+                      const checkData = await checkResponse.json()
+                      const existingFirstLogin = checkData.activities?.find((a: any) => 
+                        a.action === 'USER_FIRST_LOGIN' && 
+                        (a.user_email === trimmedEmail || a.metadata?.invited_user_email === trimmedEmail || a.metadata?.invited_user_id === data.user.id)
+                      )
+                      if (existingFirstLogin) {
+                        shouldLog = false
+                        console.log('Index: First login activity already exists for this user, skipping')
+                      }
+                    }
+                    
+                    if (shouldLog) {
+                      const activityResponse = await fetch('/api/activity/log', {
+                        method: 'POST',
+                        headers: {
+                          'Authorization': `Bearer ${data.session.access_token}`,
+                          'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                          action: 'USER_FIRST_LOGIN',
+                          description: `User ${trimmedEmail} logged in successfully for the first time`,
+                          user_email: trimmedEmail,
+                          user_id: data.user.id
+                        })
+                      })
+                      
+                      if (activityResponse.ok) {
+                        console.log('Index: First login activity logged successfully')
+                      } else {
+                        console.error('Index: Failed to log first login activity')
+                      }
                     }
                   } else {
-                    console.log('Index: Not a first login, skipping activity logging')
+                    console.log('Index: Not a first login (last_login_at exists), skipping activity logging')
                   }
                 } else {
                   console.error('Index: Failed to get user profile for first login check')

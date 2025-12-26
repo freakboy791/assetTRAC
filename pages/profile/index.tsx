@@ -15,6 +15,12 @@ export default function ProfilePage() {
   const [companyData, setCompanyData] = useState<any>(null)
   const [activeTab, setActiveTab] = useState<'personal' | 'company'>('personal')
   const [companyLoading, setCompanyLoading] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [editProfileForm, setEditProfileForm] = useState({
+    first_name: '',
+    last_name: '',
+    middle_initial: ''
+  })
 
   // Function to get display name for user
   const getDisplayName = () => {
@@ -140,11 +146,28 @@ export default function ProfilePage() {
                 const data = await response.json()
                 
                 // Ensure we have all required user fields
+                // The getUser API fetches first_name, last_name, and middle_initial from the profiles table
                 if (data.user && data.user.id && data.user.email) {
-                  setUser(data.user) // This now includes profile data
+                  setUser(data.user) // This includes profile data: first_name, last_name, middle_initial from profiles table
                   setIsAdmin(data.isAdmin || false)
                   setIsOwner(data.isOwner || false)
-                  setUserRoles(data.roles || [])
+                  // Ensure roles array includes owner/admin if the flags are set
+                  let roles = data.roles || []
+                  if (data.isOwner && !roles.includes('owner')) {
+                    roles = [...roles, 'owner']
+                  }
+                  if (data.isAdmin && !roles.includes('admin')) {
+                    roles = [...roles, 'admin']
+                  }
+                  setUserRoles(roles)
+                  console.log('Profile: User data loaded from profiles table', { 
+                    isAdmin: data.isAdmin, 
+                    isOwner: data.isOwner, 
+                    roles: roles,
+                    first_name: data.user.first_name,
+                    last_name: data.user.last_name,
+                    middle_initial: data.user.middle_initial
+                  })
                   userDataLoaded = true
                 } else {
                   throw new Error('Incomplete user data received')
@@ -162,7 +185,16 @@ export default function ProfilePage() {
                   setUser(validatedSession.user)
                   setIsAdmin(validatedSession.userData?.isAdmin || false)
                   setIsOwner(validatedSession.userData?.isOwner || false)
-                  setUserRoles(validatedSession.userData?.roles || [])
+                  // Ensure roles array includes owner/admin if the flags are set
+                  let roles = validatedSession.userData?.roles || []
+                  if (validatedSession.userData?.isOwner && !roles.includes('owner')) {
+                    roles = [...roles, 'owner']
+                  }
+                  if (validatedSession.userData?.isAdmin && !roles.includes('admin')) {
+                    roles = [...roles, 'admin']
+                  }
+                  setUserRoles(roles)
+                  console.log('Profile: Using session data fallback', { isAdmin: validatedSession.userData?.isAdmin, isOwner: validatedSession.userData?.isOwner, roles: roles })
                   userDataLoaded = true
                 } else {
                   console.error('Session data is incomplete, cannot display profile')
@@ -234,7 +266,15 @@ export default function ProfilePage() {
                   setUser(data.user)
                   setIsAdmin(data.isAdmin || false)
                   setIsOwner(data.isOwner || false)
-                  setUserRoles(data.roles || [])
+                  // Ensure roles array includes owner/admin if the flags are set
+                  let roles = data.roles || []
+                  if (data.isOwner && !roles.includes('owner')) {
+                    roles = [...roles, 'owner']
+                  }
+                  if (data.isAdmin && !roles.includes('admin')) {
+                    roles = [...roles, 'admin']
+                  }
+                  setUserRoles(roles)
                 }
               }
             } catch (error) {
@@ -288,6 +328,75 @@ export default function ProfilePage() {
 
   const canEditCompany = isAdmin || isOwner
 
+  // Profile editing handlers
+  const handleEditProfile = () => {
+    setEditProfileForm({
+      first_name: user?.first_name || '',
+      last_name: user?.last_name || '',
+      middle_initial: user?.middle_initial || ''
+    })
+    setShowEditModal(true)
+  }
+
+  const cancelEditProfile = () => {
+    setShowEditModal(false)
+    setEditProfileForm({
+      first_name: '',
+      last_name: '',
+      middle_initial: ''
+    })
+  }
+
+  const saveProfile = async () => {
+    try {
+      const tabId = getTabId()
+      const { session: validatedSession } = await validateAndRefreshSession(tabId)
+      
+      if (!validatedSession || !validatedSession.accessToken) {
+        alert('Session expired. Please refresh the page.')
+        return
+      }
+
+      const response = await fetch('/api/profile/update', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${validatedSession.accessToken}`
+        },
+        body: JSON.stringify({
+          first_name: editProfileForm.first_name.trim() || null,
+          last_name: editProfileForm.last_name.trim() || null,
+          middle_initial: editProfileForm.middle_initial.trim() || null
+        })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        // Update local user state with new profile data
+        setUser({
+          ...user,
+          first_name: data.profile.first_name,
+          last_name: data.profile.last_name,
+          middle_initial: data.profile.middle_initial
+        })
+        setShowEditModal(false)
+        if (data.warning) {
+          alert(data.warning)
+        }
+      } else {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error', details: 'Could not parse error response' }))
+        const errorMessage = errorData.details 
+          ? `${errorData.error}: ${errorData.details}`
+          : errorData.error || 'Unknown error'
+        alert(`Failed to update profile: ${errorMessage}`)
+        console.error('Profile update error:', errorData)
+      }
+    } catch (error: any) {
+      console.error('Error saving profile:', error)
+      alert(`An error occurred while saving the profile: ${error.message || 'Unknown error'}`)
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -332,10 +441,20 @@ export default function ProfilePage() {
               <span className="text-xs text-gray-700 truncate">
                 Welcome, {getDisplayName()}
               </span>
-              {userRoles.length > 0 && (
+              {(userRoles.length > 0 || isAdmin || isOwner) && (
                 <div className="flex items-center space-x-2">
                   <span className="text-xs text-gray-500">Role:</span>
                   <div className="flex flex-wrap gap-1">
+                    {isAdmin && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                        Admin
+                      </span>
+                    )}
+                    {isOwner && !isAdmin && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        Owner
+                      </span>
+                    )}
                     {userRoles.map((role, index) => (
                       <span
                         key={index}
@@ -378,10 +497,20 @@ export default function ProfilePage() {
                 <span className="text-sm text-gray-700">
                   Welcome, {getDisplayName()}
                 </span>
-                {userRoles.length > 0 && (
+                {(userRoles.length > 0 || isAdmin || isOwner) && (
                   <div className="flex items-center space-x-2 mt-1">
                     <span className="text-xs text-gray-500">Role:</span>
                     <div className="flex space-x-1">
+                      {isAdmin && (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                          Admin
+                        </span>
+                      )}
+                      {isOwner && !isAdmin && (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          Owner
+                        </span>
+                      )}
                       {userRoles.map((role, index) => (
                         <span
                           key={index}
@@ -496,9 +625,33 @@ export default function ProfilePage() {
               <div className="p-6">
                 {activeTab === 'personal' && (
                   <div className="space-y-6">
-                    <h3 className="text-lg font-medium text-gray-900">Personal Information</h3>
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-medium text-gray-900">Personal Information</h3>
+                      <button
+                        onClick={handleEditProfile}
+                        className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                      >
+                        Edit Name
+                      </button>
+                    </div>
                     
                     <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                      {/* These values are pulled from the profiles table via /api/auth/getUser */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">First Name</label>
+                        <p className="mt-1 text-sm text-gray-900">{user?.first_name || 'Not set'}</p>
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Middle Initial</label>
+                        <p className="mt-1 text-sm text-gray-900">{user?.middle_initial || 'Not set'}</p>
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Last Name</label>
+                        <p className="mt-1 text-sm text-gray-900">{user?.last_name || 'Not set'}</p>
+                      </div>
+                      
                       <div>
                         <label className="block text-sm font-medium text-gray-700">Email</label>
                         <p className="mt-1 text-sm text-gray-900">{user?.email}</p>
@@ -512,7 +665,13 @@ export default function ProfilePage() {
                       <div>
                         <label className="block text-sm font-medium text-gray-700">Roles</label>
                         <p className="mt-1 text-sm text-gray-900">
-                          {isAdmin ? 'Admin' : isOwner ? 'Owner' : userRoles.join(', ')}
+                          {isAdmin 
+                            ? 'Admin' 
+                            : isOwner 
+                            ? 'Owner' 
+                            : userRoles.length > 0 
+                            ? userRoles.map(role => role.charAt(0).toUpperCase() + role.slice(1)).join(', ') 
+                            : 'No roles assigned'}
                         </p>
                       </div>
                       
@@ -597,6 +756,78 @@ export default function ProfilePage() {
           </div>
         </div>
       </main>
+
+      {/* Edit Profile Modal */}
+      {showEditModal && (
+        <div 
+          className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50"
+          onClick={cancelEditProfile}
+        >
+          <div 
+            className="relative top-10 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-md bg-white"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mt-3">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">
+                Edit Profile
+              </h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    First Name
+                  </label>
+                  <input
+                    type="text"
+                    value={editProfileForm.first_name}
+                    onChange={(e) => setEditProfileForm({ ...editProfileForm, first_name: e.target.value })}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    placeholder="Enter first name"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Middle Initial
+                  </label>
+                  <input
+                    type="text"
+                    value={editProfileForm.middle_initial}
+                    onChange={(e) => setEditProfileForm({ ...editProfileForm, middle_initial: e.target.value.slice(0, 1).toUpperCase() })}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    placeholder="Enter middle initial"
+                    maxLength={1}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Last Name
+                  </label>
+                  <input
+                    type="text"
+                    value={editProfileForm.last_name}
+                    onChange={(e) => setEditProfileForm({ ...editProfileForm, last_name: e.target.value })}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    placeholder="Enter last name"
+                  />
+                </div>
+                <div className="flex justify-end space-x-3 pt-4">
+                  <button
+                    onClick={cancelEditProfile}
+                    className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={saveProfile}
+                    className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Session Timeout Warning */}
       <SessionTimeoutWarning

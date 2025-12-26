@@ -50,7 +50,7 @@ export default function SessionTimeoutWarning({
             </div>
             <div className="ml-3">
               <p className="text-sm text-gray-700">
-                Your session will expire in <span className="font-semibold text-yellow-600">{timeRemaining}</span> due to inactivity.
+                Your session will expire in <span className="font-semibold text-yellow-600" key={timeRemaining}>{timeRemaining}</span> due to inactivity.
               </p>
             </div>
           </div>
