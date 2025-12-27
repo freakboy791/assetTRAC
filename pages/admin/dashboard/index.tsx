@@ -305,8 +305,13 @@ export default function AdminDashboard() {
 
   // Helper function to check if user has asset management access
   const hasAssetManagementAccess = () => {
-    // Admin and Owner always have access
-    if (isAdmin || isOwner) {
+    // System Admin always has access (system admins have full access)
+    if (isAdmin) {
+      return true
+    }
+    
+    // Owner always has access
+    if (isOwner) {
       return true
     }
     
