@@ -35,6 +35,9 @@ export default function AdminDashboard() {
   const [companiesLoading, setCompaniesLoading] = useState(false)
   const [buttonProcessing, setButtonProcessing] = useState(false)
   const dataLoadedRef = useRef(false) // Guard to prevent duplicate data loading
+  const [showTokenModal, setShowTokenModal] = useState(false)
+  const [generatedToken, setGeneratedToken] = useState<any>(null)
+  const [copiedToClipboard, setCopiedToClipboard] = useState(false)
 
   // Session timeout management
   const {
@@ -351,14 +354,15 @@ export default function AdminDashboard() {
       const data = await response.json()
 
       if (response.ok && data.success) {
-        // Show token and URL in a modal or alert
-        const message = `Download Token Generated!\n\nToken: ${data.token}\n\nDownload URL:\n${data.downloadUrl}\n\nExpires: ${new Date(data.expiresAt).toLocaleDateString()}\n\nCopy this URL and share it with the user.`
-        alert(message)
+        // Store token data and show modal
+        setGeneratedToken(data)
+        setShowTokenModal(true)
         
-        // Optionally copy to clipboard
+        // Auto-copy to clipboard
         if (navigator.clipboard) {
           navigator.clipboard.writeText(data.downloadUrl).then(() => {
-            console.log('Download URL copied to clipboard')
+            setCopiedToClipboard(true)
+            setTimeout(() => setCopiedToClipboard(false), 3000)
           })
         }
       } else {
@@ -1292,6 +1296,124 @@ export default function AdminDashboard() {
         onExtend={extendSession}
         onDismiss={dismissWarning}
       />
+
+      {/* Token Generation Modal */}
+      {showTokenModal && generatedToken && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              {/* Header */}
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-2xl font-bold text-gray-900">Download Token Generated</h2>
+                <button
+                  onClick={() => {
+                    setShowTokenModal(false)
+                    setGeneratedToken(null)
+                    setCopiedToClipboard(false)
+                  }}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Token Info */}
+              <div className="mb-6">
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                  <p className="text-sm text-green-800 mb-2">
+                    <strong>Token expires:</strong> {new Date(generatedToken.expiresAt).toLocaleString()}
+                  </p>
+                  <p className="text-sm text-green-800">
+                    <strong>Single use:</strong> {generatedToken.singleUse ? 'Yes' : 'No'}
+                  </p>
+                </div>
+
+                {/* Download URL */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Download URL (Share this with the user):
+                  </label>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={generatedToken.downloadUrl}
+                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-sm font-mono"
+                      onClick={(e) => (e.target as HTMLInputElement).select()}
+                    />
+                    <button
+                      onClick={async () => {
+                        if (navigator.clipboard) {
+                          await navigator.clipboard.writeText(generatedToken.downloadUrl)
+                          setCopiedToClipboard(true)
+                          setTimeout(() => setCopiedToClipboard(false), 3000)
+                        }
+                      }}
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
+                    >
+                      {copiedToClipboard ? '✓ Copied!' : 'Copy'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Token (for reference) */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Token (for reference):
+                  </label>
+                  <input
+                    type="text"
+                    readOnly
+                    value={generatedToken.token}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-sm font-mono"
+                    onClick={(e) => (e.target as HTMLInputElement).select()}
+                  />
+                </div>
+
+                {/* Instructions */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <h3 className="font-semibold text-blue-900 mb-2">How to share with users:</h3>
+                  <ol className="list-decimal list-inside space-y-1 text-sm text-blue-800">
+                    <li>Copy the Download URL above</li>
+                    <li>Share it via email, text message, or QR code</li>
+                    <li>User opens the link on their Android device</li>
+                    <li>User downloads and installs the APK</li>
+                    <li>User registers their device Android ID in AssetTRAC</li>
+                  </ol>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => {
+                    setShowTokenModal(false)
+                    setGeneratedToken(null)
+                    setCopiedToClipboard(false)
+                  }}
+                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={async () => {
+                    if (navigator.clipboard) {
+                      await navigator.clipboard.writeText(generatedToken.downloadUrl)
+                      setCopiedToClipboard(true)
+                      setTimeout(() => setCopiedToClipboard(false), 3000)
+                    }
+                  }}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
+                >
+                  {copiedToClipboard ? '✓ Copied to Clipboard!' : 'Copy URL Again'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
