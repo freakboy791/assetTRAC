@@ -154,10 +154,7 @@ export default function AndroidAppDownloadPage() {
         const tabId = getTabId()
         const { session: validatedSession } = await validateAndRefreshSession(tabId)
         if (validatedSession?.accessToken) {
-          await generateDownloadToken(validatedSession.accessToken)
-          // Wait a moment for token generation
-          await new Promise(resolve => setTimeout(resolve, 500))
-          downloadToken = token
+          downloadToken = await generateDownloadToken(validatedSession.accessToken)
         }
       }
 
