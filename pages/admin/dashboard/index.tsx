@@ -303,6 +303,23 @@ export default function AdminDashboard() {
     }
   }
 
+  // Helper function to check if user has asset management access
+  const hasAssetManagementAccess = () => {
+    // Admin and Owner always have access
+    if (isAdmin || isOwner) {
+      return true
+    }
+    
+    // Check for specific roles that have asset access
+    return userRoles.some(role => 
+      role === 'tech' || 
+      role === 'manager-asset' || 
+      role === 'manager-both' || 
+      role === 'viewer-asset' || 
+      role === 'viewer-both'
+    )
+  }
+
   const handleGenerateDownloadToken = async () => {
     try {
       setButtonProcessing(true)
@@ -960,8 +977,8 @@ export default function AdminDashboard() {
                 </div>
               )}
 
-            {/* Generate Download Token - Admin/Owner Only */}
-            {(isAdmin || isOwner) && (
+            {/* Generate Download Token - Users with asset management access */}
+            {hasAssetManagementAccess() && (
               <div className="bg-white overflow-hidden shadow rounded-lg">
                 <div className="p-6">
                   <div className="flex items-center">

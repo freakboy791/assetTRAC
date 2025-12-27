@@ -25,20 +25,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(401).json({ error: 'Unauthorized' })
     }
 
-    // Check if user is admin or owner
+    // Check if user has asset management access (admin, owner, or asset-related roles)
     const { data: companyUsers, error: roleError } = await supabaseAdmin()
       .from('company_users')
       .select('role')
       .eq('user_id', validatedSession.user.id)
-      .in('role', ['admin', 'owner'])
 
     if (roleError || !companyUsers || companyUsers.length === 0) {
-      return res.status(403).json({ error: 'Forbidden - Admin or Owner access required' })
+      return res.status(403).json({ error: 'Forbidden - Asset management access required' })
     }
 
-    const isAdminOrOwner = companyUsers.some(cu => cu.role === 'admin' || cu.role === 'owner')
-    if (!isAdminOrOwner) {
-      return res.status(403).json({ error: 'Forbidden - Admin or Owner access required' })
+    // Check for admin, owner, or asset management roles
+    const hasAccess = companyUsers.some(cu => {
+      const role = cu.role
+      return role === 'admin' || 
+             role === 'owner' || 
+             role === 'tech' || 
+             role === 'manager-asset' || 
+             role === 'manager-both' || 
+             role === 'viewer-asset' || 
+             role === 'viewer-both'
+    })
+
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Forbidden - Asset management access required' })
     }
 
     const { expiresInDays = 7, singleUse = true } = req.body
