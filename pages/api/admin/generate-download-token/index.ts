@@ -25,16 +25,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(401).json({ error: 'Unauthorized' })
     }
 
-    // Check if user is admin
-    const { data: companyUser } = await supabaseAdmin()
+    // Check if user is admin or owner
+    const { data: companyUsers, error: roleError } = await supabaseAdmin()
       .from('company_users')
       .select('role')
       .eq('user_id', validatedSession.user.id)
-      .eq('role', 'admin')
-      .single()
+      .in('role', ['admin', 'owner'])
 
-    if (!companyUser) {
-      return res.status(403).json({ error: 'Forbidden - Admin access required' })
+    if (roleError || !companyUsers || companyUsers.length === 0) {
+      return res.status(403).json({ error: 'Forbidden - Admin or Owner access required' })
+    }
+
+    const isAdminOrOwner = companyUsers.some(cu => cu.role === 'admin' || cu.role === 'owner')
+    if (!isAdminOrOwner) {
+      return res.status(403).json({ error: 'Forbidden - Admin or Owner access required' })
     }
 
     const { expiresInDays = 7, singleUse = true } = req.body

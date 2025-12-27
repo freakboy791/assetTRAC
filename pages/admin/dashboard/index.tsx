@@ -960,8 +960,8 @@ export default function AdminDashboard() {
                 </div>
               )}
 
-            {/* Generate Download Token - Admin Only */}
-            {isAdmin && (
+            {/* Generate Download Token - Admin/Owner Only */}
+            {(isAdmin || isOwner) && (
               <div className="bg-white overflow-hidden shadow rounded-lg">
                 <div className="p-6">
                   <div className="flex items-center">
@@ -980,9 +980,10 @@ export default function AdminDashboard() {
                   <div className="mt-4">
                     <button
                       onClick={handleGenerateDownloadToken}
-                      className="w-full bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                      disabled={buttonProcessing}
+                      className="w-full bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
                     >
-                      Generate Download Token
+                      {buttonProcessing ? 'Generating...' : 'Generate Download Token'}
                     </button>
                   </div>
                 </div>
