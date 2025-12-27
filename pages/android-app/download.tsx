@@ -15,6 +15,9 @@ export default function AndroidAppDownloadPage() {
   const [downloading, setDownloading] = useState(false)
   const [downloadComplete, setDownloadComplete] = useState(false)
   const [isAndroid, setIsAndroid] = useState(false)
+  const [hasAssetAccess, setHasAssetAccess] = useState(false)
+  const [token, setToken] = useState<string | null>(null)
+  const [generatingToken, setGeneratingToken] = useState(false)
 
   // Session timeout management
   const {
@@ -58,6 +61,23 @@ export default function AndroidAppDownloadPage() {
               setIsAdmin(data.isAdmin || false)
               setIsOwner(data.isOwner || false)
               setUserRoles(data.roles || [])
+              
+              // Check if user has asset management access
+              const hasAccess = data.isAdmin || 
+                               data.isOwner || 
+                               (data.roles || []).some((role: string) => 
+                                 role === 'tech' || 
+                                 role === 'manager-asset' || 
+                                 role === 'manager-both' || 
+                                 role === 'viewer-asset' || 
+                                 role === 'viewer-both'
+                               )
+              setHasAssetAccess(hasAccess)
+              
+              // Auto-generate token for users with asset access
+              if (hasAccess) {
+                generateDownloadToken(validatedSession.accessToken)
+              }
             }
           } catch (error) {
             console.error('Error fetching user data:', error)
@@ -81,6 +101,37 @@ export default function AndroidAppDownloadPage() {
     return getUserDisplayName(user)
   }
 
+  const generateDownloadToken = async (accessToken: string): Promise<string | null> => {
+    try {
+      setGeneratingToken(true)
+      const response = await fetch('/api/admin/generate-download-token', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          expiresInDays: 1, // Short expiration for auto-generated tokens
+          singleUse: false // Allow multiple downloads with same token
+        })
+      })
+
+      const data = await response.json()
+      if (response.ok && data.success) {
+        setToken(data.token)
+        return data.token
+      } else {
+        console.error('Failed to generate token:', data.error)
+        return null
+      }
+    } catch (error) {
+      console.error('Error generating token:', error)
+      return null
+    } finally {
+      setGeneratingToken(false)
+    }
+  }
+
   const handleSignOut = async () => {
     try {
       const tabId = getTabId()
@@ -97,8 +148,23 @@ export default function AndroidAppDownloadPage() {
     setDownloadComplete(false)
 
     try {
-      // Get the APK file URL
-      const apkUrl = '/api/android-app/download'
+      // If we have a token, use it. Otherwise, generate one first
+      let downloadToken = token
+      if (!downloadToken && hasAssetAccess) {
+        const tabId = getTabId()
+        const { session: validatedSession } = await validateAndRefreshSession(tabId)
+        if (validatedSession?.accessToken) {
+          await generateDownloadToken(validatedSession.accessToken)
+          // Wait a moment for token generation
+          await new Promise(resolve => setTimeout(resolve, 500))
+          downloadToken = token
+        }
+      }
+
+      // Get the APK file URL with token
+      const apkUrl = downloadToken 
+        ? `/api/android-app/download?token=${downloadToken}`
+        : '/api/android-app/download'
       
       // First, check if the file exists by making a HEAD request
       const checkResponse = await fetch(apkUrl, { method: 'HEAD' })
