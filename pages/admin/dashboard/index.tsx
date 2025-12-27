@@ -109,6 +109,7 @@ export default function AdminDashboard() {
 
         if (validatedSession && validatedSession.userData.isAdmin) {
           // Fetch fresh user data with profile information
+          let apiRoles: string[] = []
           try {
             const response = await fetch('/api/auth/getUser', {
               method: 'GET',
@@ -119,14 +120,14 @@ export default function AdminDashboard() {
 
             if (response.ok) {
               const data = await response.json()
-
-
-
-
               setUser(data.user) // This now includes profile data
+              // Update roles from API response if available
+              if (data.roles && Array.isArray(data.roles)) {
+                apiRoles = data.roles
+                setUserRoles(data.roles)
+              }
             } else {
               console.error('Failed to fetch user data, using session data')
-
               setUser(validatedSession.user)
             }
           } catch (error) {
@@ -137,7 +138,10 @@ export default function AdminDashboard() {
           setIsAdmin(true)
           setIsOwner(validatedSession.userData.isOwner || false)
           setHasCompany(validatedSession.userData.hasCompany || false)
-          setUserRoles(validatedSession.userData.roles || [])
+          // Use roles from API if available, otherwise use session data
+          if (apiRoles.length === 0 && validatedSession.userData.roles) {
+            setUserRoles(validatedSession.userData.roles)
+          }
           
           setLoading(false)
           

@@ -159,16 +159,32 @@ export default function AndroidAppDownloadPage() {
       }
 
       // Get the APK file URL with token
-      const apkUrl = downloadToken 
-        ? `/api/android-app/download?token=${downloadToken}`
-        : '/api/android-app/download'
+      // Note: The API now requires a token, so we must have one
+      if (!downloadToken) {
+        alert('Unable to generate download token. Please contact your administrator or use the token generation feature in the admin dashboard.')
+        setDownloading(false)
+        return
+      }
+
+      const apkUrl = `/api/android-app/download?token=${downloadToken}`
       
       // First, check if the file exists by making a HEAD request
       const checkResponse = await fetch(apkUrl, { method: 'HEAD' })
       
       if (!checkResponse.ok) {
-        const errorData = await checkResponse.json().catch(() => ({ message: 'APK file not available' }))
-        alert(`APK file not available: ${errorData.message || 'The Android app has not been built yet. Please contact your administrator.'}`)
+        // Try to get error message from response
+        let errorMessage = 'APK file not available'
+        try {
+          const errorText = await checkResponse.text()
+          if (errorText) {
+            const errorData = JSON.parse(errorText)
+            errorMessage = errorData.message || errorData.error || errorMessage
+          }
+        } catch (e) {
+          // If parsing fails, use default message
+        }
+        
+        alert(`Download failed: ${errorMessage}\n\nThe Android app may not be built yet, or the download token may be invalid. Please contact your administrator.`)
         setDownloading(false)
         return
       }
