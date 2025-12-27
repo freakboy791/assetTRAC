@@ -303,6 +303,53 @@ export default function AdminDashboard() {
     }
   }
 
+  const handleGenerateDownloadToken = async () => {
+    try {
+      setButtonProcessing(true)
+      const tabId = getTabId()
+      const { session: validatedSession } = await validateAndRefreshSession(tabId)
+      
+      if (!validatedSession) {
+        alert('Session expired. Please refresh the page.')
+        return
+      }
+
+      const response = await fetch('/api/admin/generate-download-token', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${validatedSession.accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          expiresInDays: 7,
+          singleUse: true
+        })
+      })
+
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        // Show token and URL in a modal or alert
+        const message = `Download Token Generated!\n\nToken: ${data.token}\n\nDownload URL:\n${data.downloadUrl}\n\nExpires: ${new Date(data.expiresAt).toLocaleDateString()}\n\nCopy this URL and share it with the user.`
+        alert(message)
+        
+        // Optionally copy to clipboard
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(data.downloadUrl).then(() => {
+            console.log('Download URL copied to clipboard')
+          })
+        }
+      } else {
+        alert(`Failed to generate token: ${data.error || 'Unknown error'}`)
+      }
+    } catch (error) {
+      console.error('Error generating download token:', error)
+      alert('Failed to generate download token. Please try again.')
+    } finally {
+      setButtonProcessing(false)
+    }
+  }
+
   const handleSignOut = async () => {
     try {
       // Starting sign out process
@@ -912,6 +959,35 @@ export default function AdminDashboard() {
                   </div>
                 </div>
               )}
+
+            {/* Generate Download Token - Admin Only */}
+            {isAdmin && (
+              <div className="bg-white overflow-hidden shadow rounded-lg">
+                <div className="p-6">
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0">
+                      <div className="w-8 h-8 bg-blue-100 rounded-md flex items-center justify-center">
+                        <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                        </svg>
+                      </div>
+                    </div>
+                    <div className="ml-4">
+                      <h3 className="text-lg font-medium text-gray-900">Android App Download</h3>
+                      <p className="text-sm text-gray-500">Generate secure download tokens for device installation</p>
+                    </div>
+                  </div>
+                  <div className="mt-4">
+                    <button
+                      onClick={handleGenerateDownloadToken}
+                      className="w-full bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                    >
+                      Generate Download Token
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Company Management - For all users with company access */}
             {hasCompany && canManageCompany() && (

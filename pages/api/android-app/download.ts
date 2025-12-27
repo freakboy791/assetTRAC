@@ -13,6 +13,35 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    // Validate download token for security
+    const { token } = req.query
+    
+    if (!token || typeof token !== 'string') {
+      return res.status(401).json({ 
+        error: 'Download token required',
+        message: 'A valid download token is required to download the APK file. Please contact your administrator.'
+      })
+    }
+
+    // Validate the token
+    try {
+      const validateResponse = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/android-app/validate-token?token=${token}`)
+      const validateData = await validateResponse.json()
+      
+      if (!validateData.valid) {
+        return res.status(401).json({
+          error: 'Invalid token',
+          message: validateData.message || 'Invalid or expired download token'
+        })
+      }
+    } catch (validateError) {
+      console.error('Error validating token:', validateError)
+      return res.status(500).json({
+        error: 'Token validation failed',
+        message: 'Failed to validate download token. Please try again.'
+      })
+    }
+
     // Path to the APK file in the public directory
     // Note: In production, you'll need to upload the built APK to this location
     const apkPath = path.join(process.cwd(), 'public', 'android-app', 'assettrac-checkin.apk')
